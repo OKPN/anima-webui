@@ -1,0 +1,9 @@
+# 仮想環境
+venv/
+
+# Pythonのキャッシュ
+__pycache__/
+*.py[cod]
+
+# 設定ファイル（APIキー等を含むため共有しない）
+config.json
