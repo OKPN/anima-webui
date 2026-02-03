@@ -14,7 +14,7 @@ ComfyUI をバックエンドとして利用し、直感的な操作で高品質
 
 Hugging Face (circlestone-labs/Anima) から以下のファイルをダウンロードし、配置してください。
 
-    モデルファイル: Anima-v1-0.safetensors（例）を ComfyUI 本体の models/checkpoints/ フォルダへ配置します。
+    モデルファイル: Anima-v1-0.safetensors 等を ComfyUI 本体の models/checkpoints/ フォルダへ配置します。
 
     ワークフローファイル: anima-t2i.json を本アプリ（anima-webui）のルートフォルダに配置してください。
 
@@ -31,15 +31,17 @@ cd anima-webui
 
 2. 設定ファイルの準備
 
-    config.json.sample をコピーして、同じフォルダに config.json を作成してください。
+アプリを正常に動作させるため、以下の 2 つのファイルを準備してください。
 
-    config.json を開き、必要に応じて以下の項目を編集します。
+    config.json:
 
-        DEEPL_API_KEY: 自分の API キーを入力。
+        config.json.sample をコピーして、名前を config.json に変更します。
 
-        comfy_url: ComfyUI のアドレス（デフォルトは http://127.0.0.1:8188）。
+        テキストエディタで開き、DEEPL_API_KEY、comfy_url、launch_bat（ComfyUI 起動用バッチのパス）を編集します。
 
-        launch_bat: ComfyUI を起動するためのバッチファイルのフルパス。
+    history.json:
+
+        history.json.sample をコピーして、名前を history.json に変更してください。これがプロンプト履歴の保存先になります。
 
 3. 起動
 
@@ -57,6 +59,10 @@ System	ComfyUI の起動管理。タグリスト、プリセット解像度、�
 ⚠️ 注意事項
 
     設定の保護: config.json には API キーが含まれるため、GitHub 等に公開しないでください。
+
+    二重保存の回避: 本アプリの履歴機能は ComfyUI 側の出力画像を参照するため、ストレージを無駄に消費しません。
+
+    再起動: System タブから WebUI を再起動した後は、ブラウザのページを更新（F5）してください。
 
     二重保存の回避: 本アプリの履歴機能は ComfyUI 側の出力画像を参照するため、ストレージを無駄に消費しません。
 
