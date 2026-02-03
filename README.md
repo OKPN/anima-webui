@@ -1,60 +1,63 @@
-🎨 Anima WebUI
+🎨 Anima WebUI <small>v1.1.0</small>
 
-ComfyUI をバックエンドとして利用し、直感的な操作で画像生成を行うための Gradio ベースの Web UI です。 DeepL API を利用した日本語プロンプトの自動翻訳機能や、ComfyUI サーバの起動管理機能を備えています。
+ComfyUI をバックエンドとして利用し、直感的な操作で高品質な画像生成を行うための Gradio ベースの Web UI です。 DeepL API を利用した日本語プロンプトの自動翻訳機能や、生成設定の完全な永続化履歴機能を備えています。
 🛠 事前準備
 
-このアプリを動かすには、以下の環境が必要です。
+このアプリを動かすには、以下の環境とモデルデータが必要です。
+1. ソフトウェア環境
 
-    Python 3.12.x
+    Python 3.12.x: 公式サイトからダウンロードしてください。インストール時、必ず [Add Python to PATH] にチェックを入れてください。
 
-        公式サイトからダウンロードしてください。
+    ComfyUI: 画像生成のバックエンドとして動作している必要があります。
 
-        重要: インストール時、必ず [Add Python to PATH] にチェックを入れてください。
+2. モデル & ワークフローの導入
 
-    ComfyUI
+Hugging Face (circlestone-labs/Anima) から以下のファイルをダウンロードし、配置してください。
 
-        画像生成のバックエンドとして動作している必要があります。
+    モデルファイル: Anima-v1-0.safetensors（例）を ComfyUI 本体の models/checkpoints/ フォルダへ配置します。
 
-    DeepL API Key (任意)
+    ワークフローファイル: anima-t2i.json を本アプリ（anima-webui）のルートフォルダに配置してください。
 
-        プロンプトの日本語翻訳機能を使用する場合に必要です。
+3. DeepL API Key (任意)
+
+    プロンプトの日本語翻訳機能を使用する場合に必要です。
 
 🚀 セットアップと起動手順
+1. リポジトリのクローン
+PowerShell
 
-    リポジトリのクローン
-    PowerShell
+git clone https://github.com/okpn/anima-webui.git
+cd anima-webui
 
-    git clone https://github.com/okpn/anima-webui.git
-    cd anima-webui
+2. 設定ファイルの準備
 
-    設定ファイルの準備
+    config.json.sample をコピーして、同じフォルダに config.json を作成してください。
 
-        config.json.sample をコピーして、同じフォルダに config.json を作成してください。
+    config.json を開き、必要に応じて以下の項目を編集します。
 
-        config.json をテキストエディタで開き、必要に応じて以下の項目を編集します。
+        DEEPL_API_KEY: 自分の API キーを入力。
 
-            DEEPL_API_KEY: 自分の API キーを入力。
+        comfy_url: ComfyUI のアドレス（デフォルトは http://127.0.0.1:8188）。
 
-            comfy_url: ComfyUI のアドレス（デフォルトは http://127.0.0.1:8188）。
+        launch_bat: ComfyUI を起動するためのバッチファイルのフルパス。
 
-    起動
+3. 起動
 
-        start_anima_webui.bat をダブルクリックしてください。
+    start_anima_webui.bat をダブルクリックしてください。
 
-        初回起動時は、自動的に仮想環境（venv）が作成され、必要なライブラリがインストールされます。
+    初回起動時に必要なライブラリ（gradio, requests, Pillow, deepl, pandas）が自動インストールされます。
 
-        準備が整うと、ブラウザで Web UI が立ち上がります。
+    準備が整うと、ブラウザで http://localhost:7867 が立ち上がります。
 
 💡 主な機能
-
-    Generate タブ: プロンプト入力と画像生成。DeepL による日本語入力サポート。
-
-    History タブ: 過去に生成した画像の履歴確認と設定の復元。
-
-    System タブ: ComfyUI サーバーの接続状態確認および、バッチファイルを指定しての起動。
-
+タブ名	機能概要
+Generate	プロンプト入力と画像生成。DeepL による日本語入力サポート。タグプリセット（Quality/Safety）の選択。
+History	永続化された生成履歴の確認。画像を消しても設定（プロンプト、シード、解像度等）を完全に復元可能。
+System	ComfyUI の起動管理。タグリスト、プリセット解像度、デフォルトネガティブプロンプトの編集。WebUI の再起動。
 ⚠️ 注意事項
 
-    config.json には個人情報（APIキーなど）が含まれるため、GitHub 等に公開しないよう注意してください（デフォルトで .gitignore に指定されています）。
+    設定の保護: config.json には API キーが含まれるため、GitHub 等に公開しないでください。
 
-    ComfyUI 側で使用するワークフロー（anima-t2i.json）に必要なカスタムノードがインストールされていることを確認してください。
+    二重保存の回避: 本アプリの履歴機能は ComfyUI 側の出力画像を参照するため、ストレージを無駄に消費しません。
+
+    再起動: System タブから WebUI を再起動した後は、ブラウザのページを更新（F5）してください。
