@@ -1,4 +1,4 @@
-🎨 Anima WebUI <small>v1.1.0</small>
+🎨 Anima WebUI <small>v1.1.1</small>
 
 ComfyUI をバックエンドとして利用し、直感的な操作で高品質な画像生成を行うための Gradio ベースの Web UI です。 DeepL API を利用した日本語プロンプトの自動翻訳機能や、生成設定の完全な永続化履歴機能を備えています。
 🛠 事前準備
@@ -39,10 +39,7 @@ cd anima-webui
 
         テキストエディタで開き、DEEPL_API_KEY、comfy_url、launch_bat（ComfyUI 起動用バッチのパス）を編集します。
 
-    history.json:
-
-        history.json.sample をコピーして、名前を history.json に変更してください。これがプロンプト履歴の保存先になります。
-
+    
 3. 起動
 
     start_anima_webui.bat をダブルクリックしてください。
