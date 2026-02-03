@@ -1,0 +1,31 @@
+Anima T2I WebUI License (v1.1.1)
+
+1. Software License
+-------------------
+This software is licensed under the Polyform Noncommercial License 1.0.0.
+- You are free to use, modify, and distribute this software for non-commercial purposes.
+- SELLING THIS SOFTWARE OR PROVIDING IT AS A PAID SERVICE IS STRICTLY PROHIBITED.
+
+2. Output Data (Images, etc.) Policy
+------------------------------------
+- The Author (Licensor) claims no intellectual property rights over the data generated or processed using this software.
+- THE USER IS SOLELY RESPONSIBLE FOR THE USE OF THE OUTPUT DATA.
+- The rights and permitted uses of the output data are strictly subject to the license terms of the underlying AI models (e.g., Stable Diffusion OpenRAIL, etc.) used during the generation process.
+- The User must comply with any restrictive clauses or ethical guidelines set by the respective model providers.
+
+---
+
+Anima T2I WebUI ライセンス (v1.1.1)
+
+1. ソフトウェア本体のライセンス
+-------------------------------
+本ソフトウェアは Polyform Noncommercial License 1.0.0 に基づいて公開されています。
+- 非営利目的であれば、自由に利用、改変、配布することができます。
+- 本ソフトウェア自体の販売、および本ソフトウェアを主とした有料サービスの提供を固く禁止します。
+
+2. 出力データ（画像等）に関するポリシー
+---------------------------------------
+- 開発者は、本ソフトウェアを使用して生成または加工されたデータに対して、一切の知的財産権を主張しません。
+- 出力データの利用に関する責任はすべてユーザーに帰属します。
+- 出力データの利用可否および権利関係は、生成時に使用されたAIモデル（Stable DiffusionのOpenRAILライセンス等）の規約に全面的に依存します。
+- ユーザーは、各モデル提供者が定める禁止事項や倫理規定を遵守する必要があります。
