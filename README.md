@@ -28,6 +28,7 @@ Hugging Face (circlestone-labs/Anima) から以下のファイルをダウンロ
 PowerShell
 
 git clone https://github.com/okpn/anima-webui.git
+
 cd anima-webui
 
 2. 設定ファイルの準備
@@ -50,10 +51,12 @@ cd anima-webui
     準備が整うと、ブラウザで http://localhost:7867 が立ち上がります。
 
 💡 主な機能
+
 タブ名	機能概要
 Generate	プロンプト入力と画像生成。DeepL による日本語入力サポート。タグプリセット（Quality/Safety）の選択。
 History	永続化された生成履歴の確認。画像を消しても設定（プロンプト、シード、解像度等）を完全に復元可能。
 System	ComfyUI の起動管理。タグリスト、プリセット解像度、デフォルトネガティブプロンプトの編集。WebUI の再起動。
+
 ⚠️ 注意事項
 
     設定の保護: config.json には API キーが含まれるため、GitHub 等に公開しないでください。
