@@ -1,35 +1,17 @@
 import gradio as gr
 import deepl
-import json
-import os
-
-# --- 設定ファイルの管理 ---
-CONFIG_FILE = "config.json"
-
-def load_config():
-    """config.jsonから設定を読み込む"""
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    else:
-        default_config = {"DEEPL_API_KEY": ""}
-        save_config(default_config)
-        return default_config
-
-def save_config(config_data):
-    """config.jsonに設定を保存する"""
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(config_data, f, indent=4, ensure_ascii=False)
-
-config = load_config()
+import config_utils  # 共通ユーティリティをインポート
 
 def translate_prompt(text):
+    """DeepLを使用してテキストを翻訳する"""
     if not text:
         return ""
-    current_config = load_config()
-    api_key = current_config.get("DEEPL_API_KEY", "")
+        
+    # 最新の設定を読み込む
+    config = config_utils.load_config()
+    api_key = config.get("DEEPL_API_KEY", "")
 
-    if not api_key or "ここに" in api_key:
+    if not api_key or "YOUR" in api_key or "ここに" in api_key:
         return "Error: APIキーが設定されていません。"
 
     try:
@@ -40,14 +22,19 @@ def translate_prompt(text):
         return f"Error: {str(e)}"
 
 def update_api_key(new_key):
+    """APIキーを共通設定ファイルに保存する"""
+    config = config_utils.load_config()
     config["DEEPL_API_KEY"] = new_key
-    save_config(config)
-    return f"APIキーを保存しました: {new_key[:4]}****"
+    
+    if config_utils.save_config(config):
+        return f"✅ APIキーを保存しました: {new_key[:4]}****"
+    else:
+        return "❌ 保存に失敗しました"
 
-# --- UIモジュール部分 (レイアウト変更版) ---
+# --- UIモジュール部分 ---
 
 def create_translation_ui():
-    """翻訳メイン UI (API設定を含まない)"""
+    """翻訳メイン UI (日本語入力と翻訳結果表示)"""
     with gr.Column():
         gr.Markdown("### 🇯🇵→🇺🇸 DeepL Prompt Bridge")
         
@@ -77,7 +64,9 @@ def create_translation_ui():
     return input_ja, output_en
 
 def create_api_key_ui():
-    """APIキー設定専用の UI"""
+    """APIキー設定専用の UI (アコーディオン内)"""
+    config = config_utils.load_config()
+    
     with gr.Accordion("APIキー設定", open=False):
         key_input = gr.Textbox(
             label="DeepL API Key", 

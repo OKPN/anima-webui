@@ -1,0 +1,45 @@
+{
+    "server_name": "0.0.0.0",
+    "server_port": 7867,
+    "comfy_url": "http://127.0.0.1:8188",
+    "workflow_file": "anima-t2i.json",
+    "launch_bat": "C:/path/to/your/comfyui/run_nvidia_gpu.bat",
+    "history_file_path": "C:/Users/YourName/Documents/AnimaWebUI_History/history.json",
+    "DEEPL_API_KEY": "YOUR_DEEPL_API_KEY_HERE",
+    "default_negative_prompt": "worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia, extra arms, extra legs, bad anatomy, missing limb, bad hands, extra fingers, extra digits, bad fingers, bad legs, extra legs, bad feet, ",
+    "quality_tags_list": [
+        "masterpiece",
+        "best quality",
+        "good quality",
+        "normal quality",
+        "score_9",
+        "score_8",
+        "score_7",
+        "score_6",
+        "score_5",
+        "score_4"
+    ],
+    "default_quality_tags": [
+        "masterpiece",
+        "best quality",
+        "score_9",
+        "score_8",
+        "score_7"
+    ],
+    "safety_tags_list": [
+        "safe",
+        "sensitive",
+        "nsfw",
+        "explicit"
+    ],
+    "default_safety_tags": [
+        "safe"
+    ],
+    "resolution_presets": {
+        "1024x1024": [1024, 1024],
+        "1152x896": [1152, 896],
+        "896x1152": [896, 1152],
+        "1216x832": [1216, 832]
+    },
+    "default_resolution": "1152x896"
+}

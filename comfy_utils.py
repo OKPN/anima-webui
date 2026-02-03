@@ -58,7 +58,7 @@ def run_comfy_api(workflow, comfy_url):
     if not target_img_info:
         raise RuntimeError("出力画像が見つかりませんでした。ワークフローを確認してください。")
 
-    # 4. 画像データの取得 (/view API)
+    # 4. 画像データの取得と情報の返却
     view_params = {
         "filename": target_img_info["filename"],
         "subfolder": target_img_info.get("subfolder", ""),
@@ -68,7 +68,10 @@ def run_comfy_api(workflow, comfy_url):
     try:
         img_res = requests.get(f"{comfy_url}/view", params=view_params, timeout=20)
         img_res.raise_for_status()
-        return Image.open(io.BytesIO(img_res.content)).convert("RGB")
+        img_obj = Image.open(io.BytesIO(img_res.content)).convert("RGB")
+        
+        # 画像オブジェクトと、ComfyUI側でのファイル情報をセットで返す
+        return img_obj, view_params
     except Exception as e:
         raise RuntimeError(f"画像の取得に失敗しました: {e}")
 

@@ -2,3 +2,4 @@ gradio
 requests
 Pillow
 deepl
+pandas

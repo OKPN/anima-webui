@@ -1,8 +1,0 @@
-{
-    "server_name": "0.0.0.0",
-    "server_port": 7867,
-    "comfy_url": "http://127.0.0.1:8188",
-    "workflow_file": "anima-t2i.json",
-    "launch_bat": "C:/path/to/your/comfyui/run_nvidia_gpu.bat",
-    "DEEPL_API_KEY": "ここにDeepLのAPIキーを貼り付けてください"
-}
