@@ -3,7 +3,7 @@ import os
 import pandas as pd
 
 # アプリのバージョン定数 (ここを Single Source of Truth にする)
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 CONFIG_FILE = "config.json"
 
 DEFAULT_CONFIG = {
