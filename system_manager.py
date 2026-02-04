@@ -2,6 +2,7 @@ import socket
 import subprocess
 import os
 import sys
+from urllib.parse import urlparse
 
 def check_comfy_status(host="127.0.0.1", port=8188):
     """ComfyUIのポートが開放されているか確認"""
@@ -9,13 +10,30 @@ def check_comfy_status(host="127.0.0.1", port=8188):
         s.settimeout(1)
         return s.connect_ex((host, port)) == 0
 
-def launch_comfy(bat_path):
-    """バッチファイルを新しいウィンドウで実行"""
+def launch_comfy(bat_path, comfy_url):
+    """
+    ComfyUIが未起動の場合のみバッチファイルを実行する
+    """
+    # URLからホストとポートを解析
+    try:
+        parsed = urlparse(comfy_url)
+        host = parsed.hostname or "127.0.0.1"
+        port = parsed.port or 8188
+    except:
+        host, port = "127.0.0.1", 8188
+
+    # 既に起動しているかチェック
+    if check_comfy_status(host, port):
+        return "ℹ️ ComfyUI は既に起動しています。再起動の必要はありません。"
+
     if os.path.exists(bat_path):
         # 新しいコンソールを開いて実行
         subprocess.Popen(["cmd", "/c", bat_path], creationflags=subprocess.CREATE_NEW_CONSOLE)
         return "🚀 起動コマンドを送信しました。立ち上がるまで数十秒お待ちください。"
+    
     return f"❌ エラー: バッチファイルが見つかりません\nパス: {bat_path}"
+
+# (restart_gradio と get_local_ip は変更なし)
 
 def restart_gradio(app_name="Gradio"):
     """

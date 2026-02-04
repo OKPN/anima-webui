@@ -33,6 +33,10 @@ def create_ui(config):
     safety_tags_list = config.get("safety_tags_list", [])
     default_safety_tags = config.get("default_safety_tags", [])
     
+    # 外部リンク設定
+    ext_link_name = config.get("external_link_name", "Link")
+    ext_link_url = config.get("external_link_url", "#")
+    
     default_neg_prompt = config.get("default_negative_prompt")
     comfy_url = config.get("comfy_url", "")
     workflow_file = config.get("workflow_file")
@@ -60,9 +64,9 @@ def create_ui(config):
             gr.update(visible=False) 
         )
 
-    def handle_save_settings(url, bat_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, res_df, neg_prompt):
-        """すべてのカテゴリを config_utils へ渡す"""
-        if config_utils.update_and_save_config(url, bat_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, res_df, neg_prompt):
+    def handle_save_settings(url, bat_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, res_df, neg_prompt, ext_name, ext_url):
+        """外部リンク情報を含む全設定の保存"""
+        if config_utils.update_and_save_config(url, bat_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, res_df, neg_prompt, ext_name, ext_url):
             return "✅ 設定を保存しました。反映にはアプリの再起動を推奨します。"
         return "❌ 設定の保存に失敗しました。"
 
@@ -181,6 +185,7 @@ def create_ui(config):
                         image_output = gr.Image(label="Result", format="png")
                         status_output = gr.Textbox(label="Status", interactive=False)
                         generate_button_side = gr.Button("Generate Image", variant="primary")
+                        
                         with gr.Accordion("Advanced Settings", open=False):
                             sampler_dropdown = gr.Dropdown(label="Sampler", choices=["er_sde", "euler_ancestral", "res_multistep"], value="euler_ancestral")
                             res_preset = gr.Dropdown(label="Resolution Preset", choices=list(RESOLUTION_PRESETS.keys()) + ["Custom"], value=default_res_key)
@@ -191,7 +196,15 @@ def create_ui(config):
                             with gr.Row():
                                 width_slider = gr.Slider(label="Width", minimum=512, maximum=2048, value=default_w, step=64)
                                 height_slider = gr.Slider(label="Height", minimum=512, maximum=2048, value=default_h, step=64)
-                        gr.Markdown("### [🔗 MediaMatrix Station](http://192.168.0.29:7861)")
+                        
+                        gr.Markdown("### 🛠️ Quick Server Control")
+                        with gr.Row():
+                            refresh_btn_adv = gr.Button("🔄 Check Status")
+                            launch_btn_adv = gr.Button("🚀 Launch ComfyUI", variant="primary")
+                        restart_btn_adv = gr.Button(f"♻️ Restart {app_name}", variant="secondary")
+                        
+                        # 動的な外部リンク表示
+                        gr.Markdown(f"### [🔗 {ext_link_name}]({ext_link_url})")
 
             with gr.Tab("History", id=1):
                 history_hint = gr.Markdown(f"💡 ヒント...", visible=not is_matched)
@@ -213,10 +226,15 @@ def create_ui(config):
                         m_tags_edit = gr.Textbox(label="Meta Tags (Comma separated)", value=", ".join(meta_tags_list))
                         s_tags_edit = gr.Textbox(label="Safety Tags (Comma separated)", value=", ".join(safety_tags_list))
                         
+                        # 【修正】デフォルトネガティブプロンプトをタグ編集の最後に移動
                         neg_edit = gr.Textbox(label="Default Negative Prompt", value=default_neg_prompt, lines=3)
+                        
+                        gr.Markdown("### 🔗 External Link Settings")
+                        ext_name_in = gr.Textbox(label="Link Name", value=ext_link_name)
+                        ext_url_in = gr.Textbox(label="Link URL", value=ext_link_url)
+
                         save_btn = gr.Button("Save All Settings", variant="primary")
                         save_msg = gr.Markdown("")
-                    # ... (残りのカラムは維持)
                     with gr.Column():
                         gr.Markdown("### 📏 Resolution Presets")
                         res_df_data = pd.DataFrame([{"Name": k, "Width": v[0], "Height": v[1]} for k, v in RESOLUTION_PRESETS.items()])
@@ -229,6 +247,7 @@ def create_ui(config):
 
         # --- イベント定義 ---
         copy_ip_btn.click(fn=apply_detected_ip, outputs=[url_in, history_hint])
+        reflect_btn.click(fn=lambda x: x, inputs=[output_en], outputs=[prompt_input])
         predict_params = dict(
             fn=predict, 
             inputs=[
@@ -239,10 +258,19 @@ def create_ui(config):
         )
         generate_button.click(**predict_params)
         generate_button_side.click(**predict_params)
+        refresh_btn_adv.click(fn=lambda: "🟢 Running" if system_manager.check_comfy_status() else "🔴 Stopped", outputs=[status_output])
+        launch_btn_adv.click(fn=lambda bat, url: system_manager.launch_comfy(bat, url), inputs=[bat_in, url_in], outputs=[status_output])
+        restart_btn_adv.click(fn=lambda: system_manager.restart_gradio(app_name))
         history_gallery.select(fn=restore_from_history, inputs=[history_state], outputs=[prompt_input, neg_input, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, tabs])
-        save_btn.click(fn=handle_save_settings, inputs=[url_in, bat_in, q_tags_edit, d_tags_edit, t_tags_edit, m_tags_edit, s_tags_edit, res_editor, neg_edit], outputs=[save_msg])
+        
+        save_btn.click(
+            fn=handle_save_settings, 
+            inputs=[url_in, bat_in, q_tags_edit, d_tags_edit, t_tags_edit, m_tags_edit, s_tags_edit, res_editor, neg_edit, ext_name_in, ext_url_in], 
+            outputs=[save_msg]
+        )
+        
         refresh_btn.click(fn=lambda: "🟢 Running" if system_manager.check_comfy_status() else "🔴 Stopped", outputs=[status_text])
-        launch_btn.click(fn=lambda bat: system_manager.launch_comfy(bat), inputs=[bat_in], outputs=[status_text])
+        launch_btn.click(fn=lambda bat, url: system_manager.launch_comfy(bat, url), inputs=[bat_in, url_in], outputs=[status_text])
         restart_btn.click(fn=lambda: system_manager.restart_gradio(app_name))
         
     return demo

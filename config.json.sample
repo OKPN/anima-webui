@@ -1,5 +1,5 @@
 {
-    "version": "1.2.0",
+    "version": "1.2.1",
     "app_name": "Anima T2I WebUI",
     "server_name": "0.0.0.0",
     "server_port": 7867,
@@ -65,4 +65,6 @@
     },
     "default_resolution": "1152x896",
     "history_file_path": "history.json"
+    "external_link_name": "",
+    "external_link_url": ""
 }

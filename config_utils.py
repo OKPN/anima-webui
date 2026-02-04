@@ -4,7 +4,7 @@ import pandas as pd
 
 # アプリのバージョン定数
 APP_NAME = "Anima T2I WebUI"
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 CONFIG_FILE = "config.json"
 
 DEFAULT_CONFIG = {
@@ -17,12 +17,8 @@ DEFAULT_CONFIG = {
     "launch_bat": "",
     "DEEPL_API_KEY": "",
     "default_negative_prompt": "worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia, extra arms, extra legs, bad anatomy, missing limb, bad hands, extra fingers, extra digits, bad fingers, bad legs, extra legs, bad feet, ",
-    "quality_tags_list": [
-        "masterpiece", "best quality", "good quality", "normal quality",
-        "score_9", "score_8", "score_7", "score_6", "score_5", "score_4"
-    ],
+    "quality_tags_list": ["masterpiece", "best quality", "good quality", "normal quality", "score_9", "score_8", "score_7", "score_6", "score_5", "score_4"],
     "default_quality_tags": ["masterpiece", "best quality", "score_9", "score_8", "score_7"],
-    # 管理対象に追加
     "decade_tags_list": ["2020s", "2010s", "2000s", "1990s", "1980s"],
     "time_period_tags_list": ["newest", "recent", "mid", "early", "old"],
     "meta_tags_list": ["highres", "absurdres", "anime screenshot", "jpeg artifacts", "official art"],
@@ -34,7 +30,10 @@ DEFAULT_CONFIG = {
         "896x1152": [896, 1152],
         "1216x832": [1216, 832]
     },
-    "default_resolution": "1152x896"
+    "default_resolution": "1152x896",
+    # --- 【追加】外部リンクセクション ---
+    "external_link_name": "Catbox.moe",
+    "external_link_url": "https://catbox.moe/"
 }
 
 def load_config():
@@ -44,9 +43,8 @@ def load_config():
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 user_config = json.load(f)
                 config.update(user_config)
-                config["version"] = VERSION 
-        except Exception as e:
-            print(f"Config load error: {e}")
+        except Exception:
+            pass
     return config
 
 def save_config(config_data):
@@ -54,18 +52,17 @@ def save_config(config_data):
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config_data, f, indent=4, ensure_ascii=False)
         return True
-    except Exception as e:
-        print(f"Config save error: {e}")
+    except:
         return False
 
-def update_and_save_config(url, bat_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, res_df, neg_prompt):
-    """すべてのタグカテゴリを保存対象に含める"""
+def update_and_save_config(url, bat_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, res_df, neg_prompt, ext_name, ext_url):
     config = load_config()
     config["comfy_url"] = url
     config["launch_bat"] = bat_path
     config["default_negative_prompt"] = neg_prompt
+    config["external_link_name"] = ext_name
+    config["external_link_url"] = ext_url
     
-    # 文字列をカンマで分割してリスト化
     config.update({
         "quality_tags_list": [t.strip() for t in q_tags_str.split(",") if t.strip()],
         "decade_tags_list": [t.strip() for t in d_tags_str.split(",") if t.strip()],
@@ -77,10 +74,6 @@ def update_and_save_config(url, bat_path, q_tags_str, d_tags_str, t_tags_str, m_
     new_res = {}
     for _, row in res_df.iterrows():
         name = str(row["Name"]).strip()
-        if name and row["Width"] and row["Height"]:
-            try:
-                new_res[name] = [int(row["Width"]), int(row["Height"])]
-            except (ValueError, TypeError):
-                continue
+        if name: new_res[name] = [int(row["Width"]), int(row["Height"])]
     config["resolution_presets"] = new_res
     return save_config(config)

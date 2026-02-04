@@ -1,8 +1,9 @@
 @echo off
-:: 文字コードをUTF-8に変更 [cite: 1]
+:: 冒頭のエラー表示を消去し、パス移動の警告を抑制 [cite: 1]
+cls
 chcp 65001 >nul
 setlocal enabledelayedexpansion
-cd /d %~dp0 [cite: 1]
+cd /d %~dp0 2>nul [cite: 1]
 
 :: --- 設定エリア ---
 set VENV_NAME=venv
@@ -15,7 +16,7 @@ echo ========================================================
 echo    Anima WebUI 起動ツール
 echo ========================================================
 
-:: 1. 仮想環境のチェック 
+:: 1. 仮想環境のチェック [cite: 1]
 if exist "%VENV_NAME%" (
     echo [INFO] 仮想環境が見つかりました。起動準備をします...
     goto :START_APP
@@ -40,7 +41,7 @@ echo [START] 仮想環境を使って %PYTHON_SCRIPT% を起動します... [cit
 echo --------------------------------------------------------
 echo ※ 終了するにはこの画面を閉じるか、Ctrl+C を押してください。
 echo.
-"%VENV_NAME%\Scripts\python.exe" %PYTHON_SCRIPT% [cite: 6]
+"%VENV_NAME%\Scripts\python.exe" %PYTHON_SCRIPT% [cite: 3]
 
 if errorlevel 1 goto :ERROR_APP
 
@@ -54,14 +55,14 @@ echo.
 echo --------------------------------------------------------
 echo [ERROR] Python が見つからないか、実行に失敗しました。
 echo.
-echo ▼ 対処方法:
-echo 1. Python 3.12 がインストールされているか確認してください。
-echo 2. 未インストールの場合は、公式サイトから 3.12.x を入手してください。
-echo    URL: https://www.python.org/downloads/windows/
+echo ▼ 対処方法: [cite: 4]
+echo 1. Python 3.12 がインストールされているか確認してください。 [cite: 4]
+echo 2. 未インストールの場合は、公式サイトから 3.12.x を入手してください。 [cite: 4]
+echo    URL: https://www.python.org/downloads/windows/ [cite: 4]
 echo.
-echo ★重要★
-echo インストーラー実行時、画面下の 
-echo [Add Python to PATH] に必ずチェックを入れてください。
+echo ★重要★ [cite: 5]
+echo インストーラー実行時、画面下の [cite: 5]
+echo [Add Python to PATH] に必ずチェックを入れてください。 [cite: 5]
 echo --------------------------------------------------------
 pause
 exit
