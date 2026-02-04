@@ -28,6 +28,10 @@ def create_ui(config):
     safety_tags_list = config.get("safety_tags_list", [])
     default_safety_tags = config.get("default_safety_tags", [])
     
+    # --- 【新設】Custom Tags の取得 ---
+    custom_tags_list = config.get("custom_tags_list", [])
+    default_custom_tags = config.get("default_custom_tags", [])
+    
     # 外部リンク設定
     ext_link_name = config.get("external_link_name", "Link")
     ext_link_url = config.get("external_link_url", "#")
@@ -36,7 +40,7 @@ def create_ui(config):
     comfy_url = config.get("comfy_url", "")
     workflow_file = config.get("workflow_file")
 
-    # 年代リールの選択肢 (1950年まで)
+    # 年代リールの選択肢
     year_choices = [str(y) for y in range(2026, 1949, -1)]
 
     def clean_url(url):
@@ -56,14 +60,15 @@ def create_ui(config):
             gr.update(visible=False) 
         )
 
-    def handle_save_settings(url, bat_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, res_df, neg_prompt, ext_name, ext_url):
-        """全設定を正確に保存"""
-        if config_utils.update_and_save_config(url, bat_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, res_df, neg_prompt, ext_name, ext_url):
+    def handle_save_settings(url, bat_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, c_tags_str, res_df, neg_prompt, ext_name, ext_url):
+        """全設定を正確に保存 (Custom Tagsを追加)"""
+        if config_utils.update_and_save_config(url, bat_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, c_tags_str, res_df, neg_prompt, ext_name, ext_url):
             return "✅ 設定を保存しました。反映にはアプリの再起動を推奨します。"
         return "❌ 設定の保存に失敗しました。"
 
     def predict(prompt, neg_prompt, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, quality_tags, 
-                y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, current_comfy_url):
+                y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, custom_tags, current_comfy_url):
+        """生成実行ロジック (Custom Tagsをプロンプトに結合)"""
         workflow = comfy_utils.load_workflow(workflow_file)
         if not workflow: return None, "Workflow not found.", history, gr.update()
 
@@ -72,7 +77,8 @@ def create_ui(config):
         if y2_en: selected_years.append(f"year {y2_val}")
         if y3_en: selected_years.append(f"year {y3_val}")
 
-        combined_presets = quality_tags + selected_years + decade_tags + period_tags + meta_tags + safety_tags
+        # Custom Tags を結合
+        combined_presets = quality_tags + selected_years + decade_tags + period_tags + meta_tags + safety_tags + custom_tags
         prefix = ", ".join(combined_presets) + ", " if combined_presets else ""
         full_positive_prompt = prefix + prompt
         
@@ -93,6 +99,7 @@ def create_ui(config):
                 "sampler_name": sampler_name, "quality_tags": quality_tags, 
                 "y1_en": y1_en, "y1_val": y1_val, "y2_en": y2_en, "y2_val": y2_val, "y3_en": y3_en, "y3_val": y3_val,
                 "decade_tags": decade_tags, "period_tags": period_tags, "meta_tags": meta_tags, "safety_tags": safety_tags,
+                "custom_tags": custom_tags, # 履歴に保存
                 "caption": f"Seed: {final_seed} | {sampler_name}"
             }
             saved_entry = history_utils.add_to_history(config, new_entry, img_info, active_url)
@@ -103,8 +110,8 @@ def create_ui(config):
             return None, f"Error: {str(e)}", history, gr.update()
 
     def restore_from_history(evt: gr.SelectData, history):
-        """履歴から全21パラメータを正確に復元"""
-        if not history or evt.index >= len(history): return [gr.update()] * 21
+        """履歴から全22パラメータを正確に復元"""
+        if not history or evt.index >= len(history): return [gr.update()] * 22
         s = history[evt.index]
         return (
             s["prompt"], s["neg_prompt"], s["seed"], False, s["cfg"], s["steps"], s["width"], s["height"], 
@@ -113,6 +120,7 @@ def create_ui(config):
             s.get("y2_en", False), s.get("y2_val", "2025"),
             s.get("y3_en", False), s.get("y3_val", "2024"),
             s.get("decade_tags", []), s.get("period_tags", []), s.get("meta_tags", []), s.get("safety_tags", []),
+            s.get("custom_tags", []), # 22番目のパラメータ
             gr.Tabs(selected=0)
         )
 
@@ -130,7 +138,7 @@ def create_ui(config):
             with gr.Tab("Generate", id=0):
                 with gr.Row():
                     with gr.Column(scale=1): # 左カラム
-                        with gr.Accordion("Tag Presets (Quality, Period, Meta & Safety)", open=False):
+                        with gr.Accordion("Tag Presets (Quality, Period, Custom & Safety)", open=False):
                             quality_tags_input = gr.CheckboxGroup(label="Quality Tags", choices=quality_tags_list, value=default_quality_tags)
                             gr.Markdown("---")
                             gr.Markdown("**Specific Year Slots (Blended Year Tags)**")
@@ -147,6 +155,8 @@ def create_ui(config):
                             period_tags_input = gr.CheckboxGroup(label="Period Tags", choices=time_period_tags_list, value=[])
                             meta_tags_input = gr.CheckboxGroup(label="Meta Tags", choices=meta_tags_list, value=default_meta_tags)
                             safety_tags_input = gr.CheckboxGroup(label="Safety Tags", choices=safety_tags_list, value=default_safety_tags)
+                            # 【追加】Custom Tags セクション
+                            custom_tags_input = gr.CheckboxGroup(label="Custom Tags (My Palette)", choices=custom_tags_list, value=default_custom_tags)
                         
                         prompt_input = gr.Textbox(label="Positive Prompt", lines=5)
                         with gr.Accordion("Negative Prompt", open=False):
@@ -154,7 +164,6 @@ def create_ui(config):
                         generate_button = gr.Button("Generate Image", variant="primary")
                         gr.Markdown("---")
                         
-                        # --- 🌍 DeepL Translation Section (Accordion化) ---
                         with gr.Accordion("🇯🇵→🇺🇸 DeepL Prompt Bridge", open=False):
                             input_ja, output_en = deepl_translator.create_translation_ui()
                             reflect_btn = gr.Button("⬆️ Reflect to Positive Prompt")
@@ -173,7 +182,6 @@ def create_ui(config):
                         
                         with gr.Accordion("Advanced Settings", open=False):
                             sampler_dropdown = gr.Dropdown(label="Sampler", choices=["er_sde", "euler_ancestral", "res_multistep"], value="euler_ancestral")
-                            # 解像度プリセットの復活
                             res_preset = gr.Dropdown(label="Resolution Preset", choices=list(RESOLUTION_PRESETS.keys()) + ["Custom"], value=default_res_key)
                             cfg_slider = gr.Slider(label="CFG", minimum=1.0, maximum=20.0, value=5.0, step=0.1)
                             steps_slider = gr.Slider(label="Steps", minimum=1, maximum=100, value=50, step=1)
@@ -209,6 +217,8 @@ def create_ui(config):
                         t_tags_edit = gr.Textbox(label="Time Period Tags", value=", ".join(time_period_tags_list))
                         m_tags_edit = gr.Textbox(label="Meta Tags", value=", ".join(meta_tags_list))
                         s_tags_edit = gr.Textbox(label="Safety Tags", value=", ".join(safety_tags_list))
+                        # 【追加】Custom Tags 編集枠
+                        c_tags_edit = gr.Textbox(label="Custom Tags", value=", ".join(custom_tags_list))
                         neg_edit = gr.Textbox(label="Default Negative Prompt", value=default_neg_prompt, lines=3)
                         
                         gr.Markdown("### 🔗 External Link Settings")
@@ -227,12 +237,10 @@ def create_ui(config):
                             launch_btn = gr.Button("🚀 Launch ComfyUI", variant="primary")
                         restart_btn = gr.Button(f"♻️ Restart {app_name}", variant="secondary")
 
-        # --- イベント定義 (正確に紐付け) ---
+        # --- イベント定義 ---
         copy_ip_btn.click(fn=apply_detected_ip, outputs=[url_in, history_hint])
-        # 翻訳結果をPositive Promptへ正しく反映
         reflect_btn.click(fn=lambda x: x, inputs=[output_en], outputs=[prompt_input])
         
-        # 解像度プリセット変更時のスライダー連動
         res_preset.change(
             fn=lambda p: RESOLUTION_PRESETS.get(p, [gr.update(), gr.update()]), 
             inputs=[res_preset], 
@@ -243,7 +251,9 @@ def create_ui(config):
             fn=predict, 
             inputs=[
                 prompt_input, neg_input, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, history_state, 
-                quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, url_in
+                quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, 
+                custom_tags_input, # 追加
+                url_in
             ], 
             outputs=[image_output, status_output, history_state, history_gallery]
         )
@@ -254,15 +264,22 @@ def create_ui(config):
         launch_btn_adv.click(fn=lambda bat, url: system_manager.launch_comfy(bat, url), inputs=[bat_in, url_in], outputs=[status_output])
         restart_btn_adv.click(fn=lambda: system_manager.restart_gradio(app_name))
         
+        # 22出力に更新
         history_gallery.select(
             fn=restore_from_history, 
             inputs=[history_state], 
-            outputs=[prompt_input, neg_input, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, tabs]
+            outputs=[
+                prompt_input, neg_input, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, 
+                sampler_dropdown, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, 
+                period_tags_input, meta_tags_input, safety_tags_input, 
+                custom_tags_input, # 復元対象に追加
+                tabs
+            ]
         )
         
         save_btn.click(
             fn=handle_save_settings, 
-            inputs=[url_in, bat_in, q_tags_edit, d_tags_edit, t_tags_edit, m_tags_edit, s_tags_edit, res_editor, neg_edit, ext_name_in, ext_url_in], 
+            inputs=[url_in, bat_in, q_tags_edit, d_tags_edit, t_tags_edit, m_tags_edit, s_tags_edit, c_tags_edit, res_editor, neg_edit, ext_name_in, ext_url_in], 
             outputs=[save_msg]
         )
         

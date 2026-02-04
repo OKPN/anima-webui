@@ -4,7 +4,7 @@ import pandas as pd
 
 # アプリのバージョン定数
 APP_NAME = "Anima T2I WebUI"
-VERSION = "1.2.2"
+VERSION = "1.2.3"
 CONFIG_FILE = "config.json"
 
 DEFAULT_CONFIG = {
@@ -24,6 +24,8 @@ DEFAULT_CONFIG = {
     "meta_tags_list": ["highres", "absurdres", "anime screenshot", "jpeg artifacts", "official art"],
     "safety_tags_list": ["safe", "sensitive", "nsfw", "explicit"],
     "default_safety_tags": ["safe"],
+    "custom_tags_list": ["1girl","dynamic pose", "cinematic lighting", "high contrast", "vibrant colors"],
+    "default_custom_tags": [],
     "resolution_presets": {
         "1024x1024": [1024, 1024],
         "1152x896": [1152, 896],
@@ -55,7 +57,7 @@ def save_config(config_data):
     except:
         return False
 
-def update_and_save_config(url, bat_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, res_df, neg_prompt, ext_name, ext_url):
+def update_and_save_config(url, bat_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, c_tags_str, res_df, neg_prompt, ext_name, ext_url):
     config = load_config()
     config["comfy_url"] = url
     config["launch_bat"] = bat_path
@@ -68,7 +70,8 @@ def update_and_save_config(url, bat_path, q_tags_str, d_tags_str, t_tags_str, m_
         "decade_tags_list": [t.strip() for t in d_tags_str.split(",") if t.strip()],
         "time_period_tags_list": [t.strip() for t in t_tags_str.split(",") if t.strip()],
         "meta_tags_list": [t.strip() for t in m_tags_str.split(",") if t.strip()],
-        "safety_tags_list": [t.strip() for t in s_tags_str.split(",") if t.strip()]
+        "safety_tags_list": [t.strip() for t in s_tags_str.split(",") if t.strip()],
+        "custom_tags_list": [t.strip() for t in c_tags_str.split(",") if t.strip()]
     })
     
     new_res = {}

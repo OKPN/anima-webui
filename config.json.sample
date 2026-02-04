@@ -1,62 +1,37 @@
 {
-    "version": "1.2.1",
-    "app_name": "Anima T2I WebUI",
     "server_name": "0.0.0.0",
     "server_port": 7867,
     "comfy_url": "http://127.0.0.1:8188",
     "workflow_file": "anima-t2i.json",
     "launch_bat": "C:/path/to/your/comfyui/run_nvidia_gpu.bat",
-    "DEEPL_API_KEY": "C:/Users/YourName/Documents/AnimaWebUI_History/history.json",
+    "DEEPL_API_KEY": "",
     "default_negative_prompt": "worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia, extra arms, extra legs, bad anatomy, missing limb, bad hands, extra fingers, extra digits, bad fingers, bad legs, extra legs, bad feet, ",
     "quality_tags_list": [
-        "masterpiece",
-        "best quality",
-        "good quality",
-        "normal quality",
-        "score_9",
-        "score_8",
-        "score_7",
-        "score_6",
-        "score_5",
-        "score_4"
+        "masterpiece", "best quality", "good quality", "normal quality",
+        "score_9", "score_8", "score_7", "score_6", "score_5", "score_4"
     ],
     "default_quality_tags": [
-        "masterpiece",
-        "best quality",
-        "score_9",
-        "score_8",
-        "score_7"
+        "masterpiece", "best quality", "score_9", "score_8", "score_7"
     ],
     "decade_tags_list": [
-        "2020s",
-        "2010s",
-        "2000s",
-        "1990s",
-        "1980s"
+        "2020s", "2010s", "2000s", "1990s", "1980s"
     ],
     "time_period_tags_list": [
-        "newest",
-        "recent",
-        "mid",
-        "early",
-        "old"
+        "newest", "recent", "mid", "early", "old"
     ],
     "meta_tags_list": [
-        "highres",
-        "absurdres",
-        "anime screenshot",
-        "jpeg artifacts",
-        "official art"
+        "highres", "absurdres", "anime screenshot", "jpeg artifacts", "official art"
     ],
     "safety_tags_list": [
-        "safe",
-        "sensitive",
-        "nsfw",
-        "explicit"
+        "safe", "sensitive", "nsfw", "explicit"
     ],
     "default_safety_tags": [
         "safe"
     ],
+    "custom_tags_list": [
+        "1girl", "dynamic pose", "cinematic lighting", "high contrast", "vibrant colors"
+    ],
+    "default_custom_tags": [],
     "resolution_presets": {
         "1024x1024": [1024, 1024],
         "1152x896": [1152, 896],
@@ -64,7 +39,7 @@
         "1216x832": [1216, 832]
     },
     "default_resolution": "1152x896",
-    "history_file_path": "history.json"
-    "external_link_name": "",
-    "external_link_url": ""
+    "history_file_path": "history.json",
+    "external_link_name": "Catbox.moe",
+    "external_link_url": "https://catbox.moe/"
 }
