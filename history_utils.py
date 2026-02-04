@@ -16,16 +16,21 @@ def load_history(config):
     except:
         return []
 
-def add_to_history(config, entry, img_info):
+def add_to_history(config, entry, img_info, current_url):
+    """
+    current_url: UIから渡されたURLを使用し、空白を除去して保存
+    """
     history = load_history(config)
     history_entry = entry.copy()
-    comfy_url = config.get("comfy_url", "http://127.0.0.1:8188")
     
     # ComfyUIの画像を直接参照
     filename = img_info["filename"]
     subfolder = img_info["subfolder"]
     img_type = img_info["type"]
-    history_entry["image"] = f"{comfy_url}/view?filename={filename}&subfolder={subfolder}&type={img_type}"
+    
+    # URLの空白を徹底的に除去し、末尾スラッシュもクリーニング
+    base_url = str(current_url).strip().rstrip("/")
+    history_entry["image"] = f"{base_url}/view?filename={filename}&subfolder={subfolder}&type={img_type}"
     
     history.insert(0, history_entry)
     with open(get_history_path(config), "w", encoding="utf-8") as f:

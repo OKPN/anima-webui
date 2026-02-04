@@ -2,12 +2,14 @@ import json
 import os
 import pandas as pd
 
-# アプリのバージョン定数 (ここを Single Source of Truth にする)
-VERSION = "1.1.1"
+# アプリのバージョン定数
+APP_NAME = "Anima T2I WebUI"
+VERSION = "1.2.0"
 CONFIG_FILE = "config.json"
 
 DEFAULT_CONFIG = {
-    "version": VERSION, # 設定データとしても持たせておく
+    "version": VERSION,
+    "app_name": APP_NAME,
     "server_name": "0.0.0.0",
     "server_port": 7867,
     "comfy_url": "http://127.0.0.1:8188",
@@ -20,12 +22,17 @@ DEFAULT_CONFIG = {
         "score_9", "score_8", "score_7", "score_6", "score_5", "score_4"
     ],
     "default_quality_tags": ["masterpiece", "best quality", "score_9", "score_8", "score_7"],
+    # 管理対象に追加
+    "decade_tags_list": ["2020s", "2010s", "2000s", "1990s", "1980s"],
+    "time_period_tags_list": ["newest", "recent", "mid", "early", "old"],
+    "meta_tags_list": ["highres", "absurdres", "anime screenshot", "jpeg artifacts", "official art"],
     "safety_tags_list": ["safe", "sensitive", "nsfw", "explicit"],
     "default_safety_tags": ["safe"],
     "resolution_presets": {
         "1024x1024": [1024, 1024],
         "1152x896": [1152, 896],
-        "896x1152": [896, 1152]
+        "896x1152": [896, 1152],
+        "1216x832": [1216, 832]
     },
     "default_resolution": "1152x896"
 }
@@ -37,7 +44,6 @@ def load_config():
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 user_config = json.load(f)
                 config.update(user_config)
-                # ファイル側のバージョンが古くても、定数側を優先して表示させたい場合はここで更新
                 config["version"] = VERSION 
         except Exception as e:
             print(f"Config load error: {e}")
@@ -52,13 +58,19 @@ def save_config(config_data):
         print(f"Config save error: {e}")
         return False
 
-def update_and_save_config(url, bat_path, q_tags_str, s_tags_str, res_df, neg_prompt):
+def update_and_save_config(url, bat_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, res_df, neg_prompt):
+    """すべてのタグカテゴリを保存対象に含める"""
     config = load_config()
     config["comfy_url"] = url
     config["launch_bat"] = bat_path
     config["default_negative_prompt"] = neg_prompt
+    
+    # 文字列をカンマで分割してリスト化
     config.update({
         "quality_tags_list": [t.strip() for t in q_tags_str.split(",") if t.strip()],
+        "decade_tags_list": [t.strip() for t in d_tags_str.split(",") if t.strip()],
+        "time_period_tags_list": [t.strip() for t in t_tags_str.split(",") if t.strip()],
+        "meta_tags_list": [t.strip() for t in m_tags_str.split(",") if t.strip()],
         "safety_tags_list": [t.strip() for t in s_tags_str.split(",") if t.strip()]
     })
     
