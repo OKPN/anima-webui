@@ -1,6 +1,7 @@
-🎨 Anima WebUI <small>v1.1.0</small>
+🎨 Anima WebUI <small>v1.1.1</small>
 
 ComfyUI をバックエンドとして利用し、直感的な操作で高品質な画像生成を行うための Gradio ベースの Web UI です。 DeepL API を利用した日本語プロンプトの自動翻訳機能や、生成設定の完全な永続化履歴機能を備えています。
+
 🛠 事前準備
 
 このアプリを動かすには、以下の環境とモデルデータが必要です。
@@ -27,6 +28,7 @@ Hugging Face (circlestone-labs/Anima) から以下のファイルをダウンロ
 PowerShell
 
 git clone https://github.com/okpn/anima-webui.git
+
 cd anima-webui
 
 2. 設定ファイルの準備
@@ -39,10 +41,7 @@ cd anima-webui
 
         テキストエディタで開き、DEEPL_API_KEY、comfy_url、launch_bat（ComfyUI 起動用バッチのパス）を編集します。
 
-    history.json:
-
-        history.json.sample をコピーして、名前を history.json に変更してください。これがプロンプト履歴の保存先になります。
-
+    
 3. 起動
 
     start_anima_webui.bat をダブルクリックしてください。
@@ -52,17 +51,26 @@ cd anima-webui
     準備が整うと、ブラウザで http://localhost:7867 が立ち上がります。
 
 💡 主な機能
+
 タブ名	機能概要
 Generate	プロンプト入力と画像生成。DeepL による日本語入力サポート。タグプリセット（Quality/Safety）の選択。
 History	永続化された生成履歴の確認。画像を消しても設定（プロンプト、シード、解像度等）を完全に復元可能。
 System	ComfyUI の起動管理。タグリスト、プリセット解像度、デフォルトネガティブプロンプトの編集。WebUI の再起動。
+
 ⚠️ 注意事項
 
     設定の保護: config.json には API キーが含まれるため、GitHub 等に公開しないでください。
 
-    二重保存の回避: 本アプリの履歴機能は ComfyUI 側の出力画像を参照するため、ストレージを無駄に消費しません。
+## 📜 License / ライセンス
 
-    再起動: System タブから WebUI を再起動した後は、ブラウザのページを更新（F5）してください。
+### ソフトウェア本体
+本アプリは **Polyform Noncommercial License 1.0.0** を採用しています。
+個人での利用や研究目的での配布は自由ですが、**アプリそのものを販売することは禁止**しています。
+
+### 生成物の取り扱い
+本アプリを使用して出力された画像について、開発者は権利を主張しません。
+ただし、出力データの商用利用が可能かどうかは、**使用したAIモデル（Checkpoint等）のライセンスに直接依存**します。
+> ⚠️ **注意**: ツール側で「商用OK」としていても、モデル側が「非営利限定（NC）」であれば、その画像で利益を得ることはできません。必ずモデルごとの規約を確認してください。
 
     二重保存の回避: 本アプリの履歴機能は ComfyUI 側の出力画像を参照するため、ストレージを無駄に消費しません。
 
