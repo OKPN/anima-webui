@@ -35,9 +35,8 @@ def update_api_key(new_key):
 
 def create_translation_ui():
     """翻訳メイン UI (日本語入力と翻訳結果表示)"""
+    # 外部のアコーディオンで管理するため gr.Column のみ維持
     with gr.Column():
-        gr.Markdown("### 🇯🇵→🇺🇸 DeepL Prompt Bridge")
-        
         input_ja = gr.Textbox(
             label="日本語プロンプト", 
             placeholder="ここに日本語を入力...", 

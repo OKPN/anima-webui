@@ -12,8 +12,8 @@ def create_ui(config):
     app_name = config.get("app_name", "Gradio")
     version = config_utils.VERSION
     
-    RESOLUTION_PRESETS = config.get("resolution_presets")
-    default_res_key = config.get("default_resolution")
+    RESOLUTION_PRESETS = config.get("resolution_presets", {})
+    default_res_key = config.get("default_resolution", "1152x896")
     
     initial_res = RESOLUTION_PRESETS.get(default_res_key, [1152, 896])
     default_w, default_h = initial_res[0], initial_res[1]
@@ -21,15 +21,10 @@ def create_ui(config):
     # 全カテゴリのタグリストを読み込み
     quality_tags_list = config.get("quality_tags_list", [])
     default_quality_tags = config.get("default_quality_tags", [])
-    
     decade_tags_list = config.get("decade_tags_list", [])
-    
     time_period_tags_list = config.get("time_period_tags_list", [])
-    default_time_period_tags = config.get("default_time_period_tags", [])
-    
     meta_tags_list = config.get("meta_tags_list", [])
     default_meta_tags = config.get("default_meta_tags", [])
-    
     safety_tags_list = config.get("safety_tags_list", [])
     default_safety_tags = config.get("default_safety_tags", [])
     
@@ -37,7 +32,7 @@ def create_ui(config):
     ext_link_name = config.get("external_link_name", "Link")
     ext_link_url = config.get("external_link_url", "#")
     
-    default_neg_prompt = config.get("default_negative_prompt")
+    default_neg_prompt = config.get("default_negative_prompt", "")
     comfy_url = config.get("comfy_url", "")
     workflow_file = config.get("workflow_file")
 
@@ -48,13 +43,10 @@ def create_ui(config):
         if not url: return ""
         return str(url).strip().rstrip("/")
 
-    # --- 🛠️ 自動IP検出と一致判定 ---
+    # --- 🛠️ 自動IP検出 ---
     local_ip = system_manager.get_local_ip()
     detected_url = f"http://{local_ip}:8188"
-    
-    comfy_url_clean = clean_url(comfy_url)
-    detected_url_clean = clean_url(detected_url)
-    is_matched = (comfy_url_clean == detected_url_clean)
+    is_matched = (clean_url(comfy_url) == clean_url(detected_url))
 
     # --- 2. 内部ロジック関数 ---
 
@@ -65,7 +57,7 @@ def create_ui(config):
         )
 
     def handle_save_settings(url, bat_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, res_df, neg_prompt, ext_name, ext_url):
-        """外部リンク情報を含む全設定の保存"""
+        """全設定を正確に保存"""
         if config_utils.update_and_save_config(url, bat_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, res_df, neg_prompt, ext_name, ext_url):
             return "✅ 設定を保存しました。反映にはアプリの再起動を推奨します。"
         return "❌ 設定の保存に失敗しました。"
@@ -73,16 +65,13 @@ def create_ui(config):
     def predict(prompt, neg_prompt, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, quality_tags, 
                 y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, current_comfy_url):
         workflow = comfy_utils.load_workflow(workflow_file)
-        if not workflow: 
-            return None, "Workflow not found.", history, gr.update()
+        if not workflow: return None, "Workflow not found.", history, gr.update()
 
-        # スロットから有効な年を取得
         selected_years = []
         if y1_en: selected_years.append(f"year {y1_val}")
         if y2_en: selected_years.append(f"year {y2_val}")
         if y3_en: selected_years.append(f"year {y3_val}")
 
-        # 全てのタグを結合
         combined_presets = quality_tags + selected_years + decade_tags + period_tags + meta_tags + safety_tags
         prefix = ", ".join(combined_presets) + ", " if combined_presets else ""
         full_positive_prompt = prefix + prompt
@@ -92,15 +81,13 @@ def create_ui(config):
         if "11" in workflow: workflow["11"]["inputs"]["text"] = full_positive_prompt
         if "12" in workflow: workflow["12"]["inputs"]["text"] = neg_prompt
         if "28" in workflow:
-            workflow["28"]["inputs"]["width"] = int(width)
-            workflow["28"]["inputs"]["height"] = int(height)
+            workflow["28"]["inputs"]["width"], workflow["28"]["inputs"]["height"] = int(width), int(height)
         if "19" in workflow:
             workflow["19"]["inputs"].update({"seed": final_seed, "cfg": cfg, "steps": int(steps), "sampler_name": sampler_name})
 
         try:
             active_url = clean_url(current_comfy_url)
             output_image, img_info = comfy_utils.run_comfy_api(workflow, active_url)
-            
             new_entry = {
                 "prompt": prompt, "neg_prompt": neg_prompt, "seed": final_seed, "cfg": cfg, "steps": steps, "width": width, "height": height,
                 "sampler_name": sampler_name, "quality_tags": quality_tags, 
@@ -108,25 +95,16 @@ def create_ui(config):
                 "decade_tags": decade_tags, "period_tags": period_tags, "meta_tags": meta_tags, "safety_tags": safety_tags,
                 "caption": f"Seed: {final_seed} | {sampler_name}"
             }
-            
             saved_entry = history_utils.add_to_history(config, new_entry, img_info, active_url)
-            saved_entry["image"] = clean_url(saved_entry.get("image", ""))
             history.insert(0, saved_entry)
             gallery_data = [(clean_url(item["image"]), item["caption"]) for item in history]
-            
-            return output_image, f"Success (Seed: {final_seed})", history, gallery_data
+            return output_image, f"Success", history, gallery_data
         except Exception as e:
             return None, f"Error: {str(e)}", history, gr.update()
 
-    def update_resolution(preset_name):
-        if preset_name in RESOLUTION_PRESETS:
-            res = RESOLUTION_PRESETS[preset_name]
-            return res[0], res[1]
-        return gr.update(), gr.update()
-
     def restore_from_history(evt: gr.SelectData, history):
-        if not history or evt.index >= len(history):
-            return [gr.update()] * 21
+        """履歴から全21パラメータを正確に復元"""
+        if not history or evt.index >= len(history): return [gr.update()] * 21
         s = history[evt.index]
         return (
             s["prompt"], s["neg_prompt"], s["seed"], False, s["cfg"], s["steps"], s["width"], s["height"], 
@@ -154,7 +132,6 @@ def create_ui(config):
                     with gr.Column(scale=1): # 左カラム
                         with gr.Accordion("Tag Presets (Quality, Period, Meta & Safety)", open=False):
                             quality_tags_input = gr.CheckboxGroup(label="Quality Tags", choices=quality_tags_list, value=default_quality_tags)
-                            
                             gr.Markdown("---")
                             gr.Markdown("**Specific Year Slots (Blended Year Tags)**")
                             with gr.Row():
@@ -166,7 +143,6 @@ def create_ui(config):
                             with gr.Row():
                                 y3_en = gr.Checkbox(label="Slot 3", value=False, min_width=60)
                                 y3_val = gr.Dropdown(choices=year_choices, value="2024", show_label=False)
-                            
                             decade_tags_input = gr.CheckboxGroup(label="Decade Tags", choices=decade_tags_list, value=[])
                             period_tags_input = gr.CheckboxGroup(label="Period Tags", choices=time_period_tags_list, value=[])
                             meta_tags_input = gr.CheckboxGroup(label="Meta Tags", choices=meta_tags_list, value=default_meta_tags)
@@ -177,33 +153,41 @@ def create_ui(config):
                             neg_input = gr.Textbox(show_label=False, lines=4, value=default_neg_prompt)
                         generate_button = gr.Button("Generate Image", variant="primary")
                         gr.Markdown("---")
-                        input_ja, output_en = deepl_translator.create_translation_ui()
-                        reflect_btn = gr.Button("⬆️ Reflect to Positive Prompt")
-                        deepl_translator.create_api_key_ui()
+                        
+                        # --- 🌍 DeepL Translation Section (Accordion化) ---
+                        with gr.Accordion("🇯🇵→🇺🇸 DeepL Prompt Bridge", open=False):
+                            input_ja, output_en = deepl_translator.create_translation_ui()
+                            reflect_btn = gr.Button("⬆️ Reflect to Positive Prompt")
+                            deepl_translator.create_api_key_ui()
+                        gr.Markdown("---")
                     
                     with gr.Column(scale=1): # 右カラム
                         image_output = gr.Image(label="Result", format="png")
                         status_output = gr.Textbox(label="Status", interactive=False)
                         generate_button_side = gr.Button("Generate Image", variant="primary")
                         
+                        # Seed設定（アコーディオンの外へ）
+                        with gr.Row():
+                            seed_input = gr.Number(label="Seed", value=0, precision=0, scale=3)
+                            randomize_seed = gr.Checkbox(label="Randomize Seed", value=True, scale=1)
+                        
                         with gr.Accordion("Advanced Settings", open=False):
                             sampler_dropdown = gr.Dropdown(label="Sampler", choices=["er_sde", "euler_ancestral", "res_multistep"], value="euler_ancestral")
+                            # 解像度プリセットの復活
                             res_preset = gr.Dropdown(label="Resolution Preset", choices=list(RESOLUTION_PRESETS.keys()) + ["Custom"], value=default_res_key)
-                            seed_input = gr.Number(label="Seed", value=0, precision=0)
-                            randomize_seed = gr.Checkbox(label="Randomize Seed", value=True)
                             cfg_slider = gr.Slider(label="CFG", minimum=1.0, maximum=20.0, value=5.0, step=0.1)
                             steps_slider = gr.Slider(label="Steps", minimum=1, maximum=100, value=50, step=1)
                             with gr.Row():
                                 width_slider = gr.Slider(label="Width", minimum=512, maximum=2048, value=default_w, step=64)
                                 height_slider = gr.Slider(label="Height", minimum=512, maximum=2048, value=default_h, step=64)
                         
+                        gr.Markdown("---")
                         gr.Markdown("### 🛠️ Quick Server Control")
                         with gr.Row():
                             refresh_btn_adv = gr.Button("🔄 Check Status")
                             launch_btn_adv = gr.Button("🚀 Launch ComfyUI", variant="primary")
                         restart_btn_adv = gr.Button(f"♻️ Restart {app_name}", variant="secondary")
                         
-                        # 動的な外部リンク表示
                         gr.Markdown(f"### [🔗 {ext_link_name}]({ext_link_url})")
 
             with gr.Tab("History", id=1):
@@ -215,18 +199,16 @@ def create_ui(config):
                 with gr.Row():
                     with gr.Column():
                         gr.Markdown("### 🛠 ComfyUI Server Control")
-                        url_in = gr.Textbox(label="ComfyUI URL", value=comfy_url, info="💡 IP一致チェック...")
+                        url_in = gr.Textbox(label="ComfyUI URL", value=comfy_url)
                         copy_ip_btn = gr.Button(f"📋 Set Detected IP: {detected_url}", size="sm")
                         bat_in = gr.Textbox(label="Launch Batch Path", value=config.get("launch_bat"))
                         
                         gr.Markdown("### 🏷️ Tag List Editor")
-                        q_tags_edit = gr.Textbox(label="Quality Tags (Comma separated)", value=", ".join(quality_tags_list))
-                        d_tags_edit = gr.Textbox(label="Decade Tags (Comma separated)", value=", ".join(decade_tags_list))
-                        t_tags_edit = gr.Textbox(label="Time Period Tags (Comma separated)", value=", ".join(time_period_tags_list))
-                        m_tags_edit = gr.Textbox(label="Meta Tags (Comma separated)", value=", ".join(meta_tags_list))
-                        s_tags_edit = gr.Textbox(label="Safety Tags (Comma separated)", value=", ".join(safety_tags_list))
-                        
-                        # 【修正】デフォルトネガティブプロンプトをタグ編集の最後に移動
+                        q_tags_edit = gr.Textbox(label="Quality Tags", value=", ".join(quality_tags_list))
+                        d_tags_edit = gr.Textbox(label="Decade Tags", value=", ".join(decade_tags_list))
+                        t_tags_edit = gr.Textbox(label="Time Period Tags", value=", ".join(time_period_tags_list))
+                        m_tags_edit = gr.Textbox(label="Meta Tags", value=", ".join(meta_tags_list))
+                        s_tags_edit = gr.Textbox(label="Safety Tags", value=", ".join(safety_tags_list))
                         neg_edit = gr.Textbox(label="Default Negative Prompt", value=default_neg_prompt, lines=3)
                         
                         gr.Markdown("### 🔗 External Link Settings")
@@ -245,9 +227,18 @@ def create_ui(config):
                             launch_btn = gr.Button("🚀 Launch ComfyUI", variant="primary")
                         restart_btn = gr.Button(f"♻️ Restart {app_name}", variant="secondary")
 
-        # --- イベント定義 ---
+        # --- イベント定義 (正確に紐付け) ---
         copy_ip_btn.click(fn=apply_detected_ip, outputs=[url_in, history_hint])
+        # 翻訳結果をPositive Promptへ正しく反映
         reflect_btn.click(fn=lambda x: x, inputs=[output_en], outputs=[prompt_input])
+        
+        # 解像度プリセット変更時のスライダー連動
+        res_preset.change(
+            fn=lambda p: RESOLUTION_PRESETS.get(p, [gr.update(), gr.update()]), 
+            inputs=[res_preset], 
+            outputs=[width_slider, height_slider]
+        )
+        
         predict_params = dict(
             fn=predict, 
             inputs=[
@@ -258,10 +249,16 @@ def create_ui(config):
         )
         generate_button.click(**predict_params)
         generate_button_side.click(**predict_params)
+        
         refresh_btn_adv.click(fn=lambda: "🟢 Running" if system_manager.check_comfy_status() else "🔴 Stopped", outputs=[status_output])
         launch_btn_adv.click(fn=lambda bat, url: system_manager.launch_comfy(bat, url), inputs=[bat_in, url_in], outputs=[status_output])
         restart_btn_adv.click(fn=lambda: system_manager.restart_gradio(app_name))
-        history_gallery.select(fn=restore_from_history, inputs=[history_state], outputs=[prompt_input, neg_input, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, tabs])
+        
+        history_gallery.select(
+            fn=restore_from_history, 
+            inputs=[history_state], 
+            outputs=[prompt_input, neg_input, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, tabs]
+        )
         
         save_btn.click(
             fn=handle_save_settings, 
