@@ -8,3 +8,6 @@ __pycache__/
 # 設定ファイル（APIキー等を含むため共有しない）
 config.json
 history.json
+
+# 履歴のバックアップファイル
+history.json*.bak

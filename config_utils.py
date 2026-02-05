@@ -4,7 +4,7 @@ import pandas as pd
 
 # アプリのバージョン定数
 APP_NAME = "Anima T2I WebUI"
-VERSION = "1.2.3"
+VERSION = "1.3.0"
 CONFIG_FILE = "config.json"
 
 DEFAULT_CONFIG = {
@@ -33,6 +33,7 @@ DEFAULT_CONFIG = {
         "1216x832": [1216, 832]
     },
     "default_resolution": "1152x896",
+    "backup_output_dir": "",
     # --- 【追加】外部リンクセクション ---
     "external_link_name": "Catbox.moe",
     "external_link_url": "https://catbox.moe/"
