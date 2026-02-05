@@ -35,26 +35,30 @@ def resolve_image_path(item, config):
 
     if not filename: return img_url
 
-    # 1. ComfyUI 本体の output フォルダを launch_bat から推測
+    # 拡張子を除いたベース名を取得 (例: "sample")
+    basename = os.path.splitext(filename)[0]
+    # 試行する拡張子のリスト
+    exts = [os.path.splitext(filename)[1], ".jxl", ".webp", ".png", ".jpg"]
+
+    # 探索先リスト
+    search_dirs = []
     bat_path = config.get("launch_bat", "")
     if bat_path:
-        comfy_dir = os.path.dirname(bat_path)
-        # ComfyUIの構造に合わせて 'output' フォルダを探す
-        original_file_path = os.path.join(comfy_dir, "output", subfolder, filename)
-        
-        # 物理的に存在すれば API URL のまま返す
-        if os.path.exists(original_file_path):
-            return img_url
-
-    # 2. 本来の場所にない場合、Nextcloud 側のバックアップフォルダを探す
-    backup_dir = config.get("backup_output_dir", "C:/Nextcloud/Anima_Backup") # 要設定
-    backup_file_path = os.path.join(backup_dir, filename) # 移動時はフラットに保存する前提
+        search_dirs.append(os.path.join(os.path.dirname(bat_path), "output", subfolder))
     
-    if os.path.exists(backup_file_path):
-        # 見つかればローカルパスを返す (Gradioは直接読み込み可能)
-        return backup_file_path
+    backup_dir = config.get("backup_output_dir", "")
+    if backup_dir:
+        search_dirs.append(backup_dir)
 
-    # 3. どこにもなければそのままの URL (表示はエラーになる) を返す
+    # 冗長検索: 各ディレクトリで、各拡張子を試す
+    for d in search_dirs:
+        if not os.path.exists(d): continue
+        for e in exts:
+            if not e: continue
+            target = os.path.join(d, basename + e)
+            if os.path.exists(target):
+                return target # 最初に見つかった形式を返す
+
     return img_url
 
 # ...既存の add_to_history 等...
@@ -118,3 +122,31 @@ def clear_history(config):
             print(f"❌ Error during clearing history: {e}")
             return False
     return False
+
+def delete_history_entry(config, index):
+    """
+    指定されたインデックスの履歴エントリと、その物理画像ファイルを同時に削除する
+    """
+    history = load_history(config) #
+    if 0 <= index < len(history):
+        item = history[index]
+        
+        # 1. 物理ファイルの特定と削除
+        img_path = resolve_image_path(item, config) #
+        # URL(http://...) ではなくローカルパスが返ってきた場合のみ削除を実行
+        if img_path and os.path.exists(img_path) and not img_path.startswith("http"):
+            try:
+                os.remove(img_path)
+                print(f"🗑️ Physical file deleted: {img_path}")
+            except Exception as e:
+                print(f"❌ Failed to delete file: {e}")
+
+        # 2. JSON からエントリを削除
+        history.pop(index)
+        
+        # 3. 履歴ファイルを更新
+        path = get_history_path(config) #
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=4, ensure_ascii=False)
+        return history
+    return None
