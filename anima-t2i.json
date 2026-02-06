@@ -43,7 +43,7 @@
   },
   "15": {
     "inputs": {
-      "vae_name": "qwen_image\\qwen_image_vae.safetensors"
+      "vae_name": "qwen_image_vae.safetensors"
     },
     "class_type": "VAELoader",
     "_meta": {
@@ -93,7 +93,7 @@
   },
   "44": {
     "inputs": {
-      "unet_name": "anima\\anima-preview.safetensors",
+      "unet_name": "anima-preview.safetensors",
       "weight_dtype": "default"
     },
     "class_type": "UNETLoader",
@@ -103,7 +103,7 @@
   },
   "45": {
     "inputs": {
-      "clip_name": "anima\\qwen_3_06b_base.safetensors",
+      "clip_name": "qwen_3_06b_base.safetensors",
       "type": "stable_diffusion",
       "device": "default"
     },
@@ -114,7 +114,7 @@
   },
   "52": {
     "inputs": {
-      "filename_prefix": "anima/",
+      "filename_prefix": "anima/2026-02-07_053424",
       "images": [
         "8",
         0
