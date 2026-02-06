@@ -117,7 +117,7 @@ def restore_from_history_by_index(idx, history):
     if idx < 0 or not history or idx >= len(history): return [gr.update()] * 22
     s = history[idx]
     return (
-        s["prompt"], s["neg_prompt"], s["seed"], False, s["cfg"], s["steps"], s["width"], s["height"], 
+        s["prompt"], s["neg_prompt"], s["seed"], True, s["cfg"], s["steps"], s["width"], s["height"], 
         s.get("sampler_name", "euler_ancestral"), s.get("quality_tags", []),
         s.get("y1_en", False), s.get("y1_val", "2026"), s.get("y2_en", False), s.get("y2_val", "2025"),
         s.get("y3_en", False), s.get("y3_val", "2024"),

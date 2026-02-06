@@ -4,6 +4,7 @@ import deepl_translator
 import system_manager
 import config_utils
 import history_utils 
+import ui_javascript
 import pandas as pd
 from urllib.parse import urlparse
 
@@ -73,9 +74,22 @@ def create_ui(config):
                             meta_tags_input = gr.CheckboxGroup(label="Meta Tags", choices=meta_tags_list, value=default_meta_tags)
                             safety_tags_input = gr.CheckboxGroup(label="Safety Tags", choices=safety_tags_list, value=default_safety_tags)
                             custom_tags_input = gr.CheckboxGroup(label="Custom Tags", choices=custom_tags_list, value=default_custom_tags)
-                        prompt_input = gr.Textbox(label="Positive Prompt", lines=5)
+                        
+                        with gr.Group():
+                            gr.Markdown("**Positive Prompt**")
+                            with gr.Row(variant="compact"):
+                                btn_m_01 = gr.Button("-0.1", size="sm"); btn_m_10 = gr.Button("-1.0", size="sm")
+                            with gr.Row(variant="compact"):
+                                btn_p_01 = gr.Button("+0.1", size="sm"); btn_p_10 = gr.Button("+1.0", size="sm")
+                                
+                            prompt_input = gr.Textbox(label="Positive Prompt", show_label=False, lines=5, elem_id="prompt_input_area")
                         with gr.Accordion("Negative Prompt", open=False):
-                            neg_input = gr.Textbox(show_label=False, lines=4, value=default_neg_prompt)
+                            with gr.Group():
+                                with gr.Row(variant="compact"):
+                                    neg_btn_m_01 = gr.Button("-0.1", size="sm"); neg_btn_m_10 = gr.Button("-1.0", size="sm")
+                                with gr.Row(variant="compact"):
+                                    neg_btn_p_01 = gr.Button("+0.1", size="sm"); neg_btn_p_10 = gr.Button("+1.0", size="sm")
+                                neg_input = gr.Textbox(show_label=False, lines=4, value=default_neg_prompt, elem_id="neg_prompt_input_area")
                         generate_button = gr.Button("Generate Image", variant="primary")
                         
                         # DeepL翻訳機能 (ボタン配置)
@@ -197,6 +211,18 @@ def create_ui(config):
         reflect_btn.click(fn=lambda x: x, inputs=[output_en], outputs=[prompt_input])
         
         append_btn.click(fn=ui_handlers.append_prompt, inputs=[prompt_input, output_en], outputs=[prompt_input])
+
+        # Prompt Emphasis Events (JS only)
+        btn_m_01.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(-0.1, "prompt_input_area"))
+        btn_m_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(-1.0, "prompt_input_area"))
+        btn_p_01.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(0.1, "prompt_input_area"))
+        btn_p_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(1.0, "prompt_input_area"))
+
+        # Negative Prompt Emphasis Events
+        neg_btn_m_01.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(-0.1, "neg_prompt_input_area"))
+        neg_btn_m_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(-1.0, "neg_prompt_input_area"))
+        neg_btn_p_01.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(0.1, "neg_prompt_input_area"))
+        neg_btn_p_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(1.0, "neg_prompt_input_area"))
 
         # アプリロード時は「内部データのみ」最新化し、ギャラリー描画(重い処理)は避ける
         demo.load(fn=ui_handlers.load_history_state_only, inputs=None, outputs=[history_state, history_gallery, page_state, page_label])

@@ -2,6 +2,7 @@
 import random
 import comfy_utils
 import history_utils
+import datetime # 【追加】現在時刻を取得するために必要
 
 def generate_and_save(
     prompt, neg_prompt, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
@@ -23,6 +24,9 @@ def generate_and_save(
     neg_node_id = comfy_utils.find_node_by_title(workflow, "CLIP Text Encode (Negative Prompt)")
     latent_node_id = comfy_utils.find_node_by_title(workflow, "空の潜在画像")
     sampler_node_id = comfy_utils.find_node_by_title(workflow, "Kサンプラー")
+    
+    # 【追加】保存ノードを特定 ("画像を保存" というタイトルを探す)
+    save_node_id = comfy_utils.find_node_by_title(workflow, "画像を保存")
 
     # 3. タグの結合ロジック
     selected_years = []
@@ -54,6 +58,17 @@ def generate_and_save(
             "sampler_name": sampler_name
         })
 
+    # 【追加】ファイル名（プレフィックス）を現在時刻で上書きする処理
+    if save_node_id:
+        # 現在時刻を取得し "2026-02-07_123456" の形式にする
+        now_str = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        
+        # フォルダ名 "anima" と結合して上書き
+        # 結果: anima/2026-02-07_123456_00001_.png のようになります
+        new_prefix = f"anima/{now_str}"
+        
+        workflow[save_node_id]["inputs"]["filename_prefix"] = new_prefix
+
     try:
         # 6. ComfyUI API 実行
         active_url = str(current_comfy_url).strip().rstrip("/")
@@ -71,6 +86,7 @@ def generate_and_save(
         }
 
         # 8. 履歴への追加実行
+        # (注: 引数の数は元のコードに合わせています)
         saved_entry = history_utils.add_to_history(config, new_entry, img_info, active_url, output_image)
         
         return output_image, "✅ Success", saved_entry

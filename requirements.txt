@@ -1,5 +1,4 @@
 gradio
-requests
-Pillow
-deepl
 pandas
+Pillow
+requests
