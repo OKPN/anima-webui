@@ -52,7 +52,7 @@
   },
   "19": {
     "inputs": {
-      "seed": 6135597589739260000,
+      "seed": 167231482023498,
       "steps": 50,
       "cfg": 5,
       "sampler_name": "euler_ancestral",
@@ -114,7 +114,7 @@
   },
   "52": {
     "inputs": {
-      "filename_prefix": "anima/%date_%H%M%S_%seed",
+      "filename_prefix": "anima/2026-02-06_164538",
       "images": [
         "8",
         0

@@ -9,5 +9,7 @@ __pycache__/
 config.json
 history.json
 
+thumnails/
+
 # 履歴のバックアップファイル
 history.json*.bak
