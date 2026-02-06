@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.py[cod]
+venv/
 
 # Configuration (User specific)
 config.json
