@@ -35,7 +35,20 @@ def parse_tagged_str(input_str):
             all_tags.append(t)
     return all_tags, default_tags
 
-def handle_save_settings(url, bat_path, backup_path, real_out_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, c_tags_str, res_df, neg_prompt, ext_name, ext_url):
+def process_underscores(text):
+    if not text: return ""
+    tags = [t.strip() for t in text.split(",")]
+    processed_tags = []
+    for t in tags:
+        if not t: continue
+        # scoreから始まるタグは_を維持、それ以外は_をスペースに置換
+        if t.lower().startswith("score"):
+            processed_tags.append(t)
+        else:
+            processed_tags.append(t.replace("_", " "))
+    return ", ".join(processed_tags)
+
+def handle_save_settings(url, bat_path, backup_path, real_out_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, c_tags_str, tags_path, res_df, neg_prompt, ext_name, ext_url):
     q_list, q_def = parse_tagged_str(q_tags_str)
     d_list, d_def = parse_tagged_str(d_tags_str)
     t_list, t_def = parse_tagged_str(t_tags_str)
@@ -45,7 +58,7 @@ def handle_save_settings(url, bat_path, backup_path, real_out_path, q_tags_str, 
     
     success = config_utils.update_and_save_config_v2(
         url, bat_path, backup_path, real_out_path, 
-        q_list, q_def, d_list, d_def, t_list, t_def, m_list, m_def, s_list, s_def, c_list, c_def,
+        q_list, q_def, d_list, d_def, t_list, t_def, m_list, m_def, s_list, s_def, c_list, c_def, tags_path,
         res_df, neg_prompt, ext_name, ext_url
     )
     return "✅ 保存完了。再起動後に反映されます。" if success else "❌ 保存失敗。"
@@ -54,6 +67,10 @@ def predict(prompt, neg_prompt, seed, randomize_seed, cfg, steps, width, height,
             y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, custom_tags, current_comfy_url,
             config, workflow_file):
     
+    # プロンプトのクリーニング処理 (アンダースコアをスペースに変換、scoreタグは除外)
+    prompt = process_underscores(prompt)
+    neg_prompt = process_underscores(neg_prompt)
+
     output_image, status, saved_entry = generation_manager.generate_and_save(
         prompt, neg_prompt, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
         quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, 

@@ -1,3 +1,5 @@
+import json
+
 def get_js_emphasis(delta, elem_id="prompt_input_area"):
     """プロンプトの強調ウェイトを増減させるJavaScriptコードを生成する"""
     return f"""
@@ -117,5 +119,238 @@ def get_js_emphasis(delta, elem_id="prompt_input_area"):
         // 浮動小数点の誤差を考慮して判定
         let newStr = (Math.abs(weight) < 0.001) ? content : `(${{content}}:${{weight}})`;
         replace(targetStart, targetEnd, newStr);
+    }}
+    """
+
+def get_autocomplete_js(all_tags, target_ids):
+    """
+    オートコンプリート機能を有効化するJavaScriptコードを生成する。
+    all_tags: 候補となるタグのリスト (Python list)
+    target_ids: 対象のGradio TextboxのElem IDのリスト (例: ["prompt_input_area", "neg_prompt_input_area"])
+    """
+    # タグデータをJSON文字列としてJSに埋め込む (1回のみ)
+    tags_json = json.dumps(all_tags)
+    target_ids_json = json.dumps(target_ids)
+
+    return f"""
+    () => {{
+        const TAGS = {tags_json};
+        const TARGET_IDS = {target_ids_json};
+        const MAX_CANDIDATES = 20;
+
+        // グローバル初期化チェック
+        if (window._ac_global_initialized) return;
+        window._ac_global_initialized = true;
+
+        function setupAutocomplete(targetId) {{
+            const container = document.querySelector('#' + targetId);
+            if (!container) return;
+            
+            const textarea = container.querySelector("textarea");
+            if (!textarea) return;
+
+            // 候補表示用のリスト要素を作成
+            const suggestionBox = document.createElement("ul");
+            suggestionBox.id = "ac-suggestion-box-" + targetId;
+            suggestionBox.style.position = "fixed";
+            suggestionBox.style.display = "none";
+            suggestionBox.style.zIndex = "9999";
+            suggestionBox.style.backgroundColor = "var(--background-fill-primary)";
+            suggestionBox.style.border = "1px solid var(--border-color-primary)";
+            suggestionBox.style.borderRadius = "4px";
+            suggestionBox.style.padding = "0";
+            suggestionBox.style.margin = "0";
+            suggestionBox.style.listStyle = "none";
+            suggestionBox.style.maxHeight = "300px";
+            suggestionBox.style.overflowY = "auto";
+            suggestionBox.style.boxShadow = "0 4px 6px rgba(0,0,0,0.3)";
+            suggestionBox.style.width = "250px";
+            document.body.appendChild(suggestionBox);
+
+            let currentFocus = -1;
+            let currentCandidates = [];
+
+            // キャレット座標取得用のミラーDivを作成
+            const mirrorDiv = document.createElement("div");
+            mirrorDiv.style.position = "absolute";
+            mirrorDiv.style.top = "0";
+            mirrorDiv.style.left = "0";
+            mirrorDiv.style.visibility = "hidden";
+            mirrorDiv.style.whiteSpace = "pre-wrap";
+            mirrorDiv.style.wordWrap = "break-word";
+            document.body.appendChild(mirrorDiv);
+
+            function getCaretCoordinates() {{
+                const style = window.getComputedStyle(textarea);
+                ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'letterSpacing', 'lineHeight', 'textTransform', 'wordSpacing', 'textIndent', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderWidth', 'boxSizing', 'width'].forEach(prop => {{
+                    mirrorDiv.style[prop] = style[prop];
+                }});
+                
+                const text = textarea.value.substring(0, textarea.selectionStart);
+                const span = document.createElement("span");
+                span.textContent = text;
+                mirrorDiv.textContent = "";
+                mirrorDiv.appendChild(span);
+                
+                const span2 = document.createElement("span");
+                span2.textContent = ".";
+                mirrorDiv.appendChild(span2);
+                
+                const rect = textarea.getBoundingClientRect();
+                return {{
+                    top: rect.top + span2.offsetTop - textarea.scrollTop,
+                    left: rect.left + span2.offsetLeft - textarea.scrollLeft
+                }};
+            }}
+
+            function closeList() {{
+                suggestionBox.style.display = "none";
+                currentFocus = -1;
+                currentCandidates = [];
+            }}
+
+            function insertTag(tag) {{
+                const text = textarea.value;
+                const cursor = textarea.selectionStart;
+                
+                // カーソル直前の単語範囲を探す
+                let start = cursor - 1;
+                while (start >= 0 && !/[,\\n]/.test(text[start])) start--;
+                start++; // 区切り文字の次へ
+
+                // 既存の入力文字を置換
+                const before = text.substring(0, start);
+                const after = text.substring(cursor);
+                
+                // 前の文字がスペースでなければスペースを追加（行頭などは除く）
+                let prefix = "";
+                if (start > 0 && text[start-1] !== " " && text[start-1] !== "\\n") {{
+                    // カンマの後ろならスペースを入れる
+                    if (text[start-1] === ",") prefix = " ";
+                }}
+
+                const newText = before + prefix + tag + ", " + after;
+                textarea.value = newText;
+                
+                // イベント発火
+                textarea.dispatchEvent(new Event("input", {{ bubbles: true }}));
+                
+                // カーソル移動
+                const newCursor = start + prefix.length + tag.length + 2;
+                textarea.setSelectionRange(newCursor, newCursor);
+                textarea.focus();
+                closeList();
+            }}
+
+            function updateList(query) {{
+                suggestionBox.innerHTML = "";
+                currentFocus = -1;
+                
+                if (!query) {{
+                    closeList();
+                    return;
+                }}
+
+                // 部分一致検索 (先頭一致を優先してもよい)
+                const q = query.toLowerCase().trim();
+                // スペースを含むタグも考慮し、単純なincludes検索
+                // パフォーマンスのため、ヒット数が上限を超えたら打ち切り
+                currentCandidates = [];
+                for (let tag of TAGS) {{
+                    if (tag.includes(q)) {{
+                        currentCandidates.push(tag);
+                        if (currentCandidates.length >= MAX_CANDIDATES) break;
+                    }}
+                }}
+
+                if (currentCandidates.length === 0) {{
+                    closeList();
+                    return;
+                }}
+
+                currentCandidates.forEach((tag, index) => {{
+                    const li = document.createElement("li");
+                    li.textContent = tag;
+                    li.style.padding = "4px 8px";
+                    li.style.cursor = "pointer";
+                    li.style.borderBottom = "1px solid var(--border-color-primary)";
+                    
+                    li.addEventListener("click", () => insertTag(tag));
+                    li.addEventListener("mouseover", () => {{
+                        setActive(index);
+                    }});
+                    
+                    suggestionBox.appendChild(li);
+                }});
+
+                const coords = getCaretCoordinates();
+                suggestionBox.style.top = (coords.top + 24) + "px"; // 少し下に表示
+                suggestionBox.style.left = coords.left + "px";
+                suggestionBox.style.display = "block";
+                
+                setActive(0);
+            }}
+
+            function setActive(index) {{
+                const items = suggestionBox.getElementsByTagName("li");
+                for (let i = 0; i < items.length; i++) {{
+                    items[i].style.backgroundColor = i === index ? "var(--secondary-500)" : "transparent";
+                    items[i].style.color = i === index ? "white" : "var(--body-text-color)";
+                }}
+                currentFocus = index;
+            }}
+
+            textarea.addEventListener("input", () => {{
+                const cursor = textarea.selectionStart;
+                const text = textarea.value;
+                
+                // カーソル直前の「カンマまたは改行」までの文字列を取得
+                let start = cursor - 1;
+                while (start >= 0 && !/[,\\n]/.test(text[start])) start--;
+                start++; 
+                
+                const currentWord = text.substring(start, cursor).trim();
+                
+                // 2文字以上入力したら補完開始
+                if (currentWord.length >= 2) {{
+                    updateList(currentWord);
+                }} else {{
+                    closeList();
+                }}
+            }});
+
+            textarea.addEventListener("keydown", (e) => {{
+                if (suggestionBox.style.display === "block") {{
+                    if (e.key === "ArrowDown") {{
+                        e.preventDefault();
+                        currentFocus++;
+                        if (currentFocus >= currentCandidates.length) currentFocus = 0;
+                        setActive(currentFocus);
+                    }} else if (e.key === "ArrowUp") {{
+                        e.preventDefault();
+                        currentFocus--;
+                        if (currentFocus < 0) currentFocus = currentCandidates.length - 1;
+                        setActive(currentFocus);
+                    }} else if (e.key === "Enter" || e.key === "Tab") {{
+                        if (currentFocus > -1) {{
+                            e.preventDefault();
+                            insertTag(currentCandidates[currentFocus]);
+                        }}
+                    }} else if (e.key === "Escape") {{
+                        closeList();
+                    }}
+                }}
+            }});
+
+            // クリックで閉じる
+            document.addEventListener("click", (e) => {{
+                if (e.target !== textarea && e.target !== suggestionBox) {{
+                    closeList();
+                }}
+            }});
+        }}
+
+        // 全ターゲットに対してセットアップ実行
+        TARGET_IDS.forEach(id => setupAutocomplete(id));
     }}
     """

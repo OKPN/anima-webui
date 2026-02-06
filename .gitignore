@@ -1,15 +1,15 @@
-# 仮想環境
-venv/
-
-# Pythonのキャッシュ
+# Python
 __pycache__/
 *.py[cod]
 
-# 設定ファイル（APIキー等を含むため共有しない）
+# Configuration (User specific)
 config.json
-history.json
 
+# History & Data
+history.json
+history.json.*.bak
 thumbnails/
 
-# 履歴のバックアップファイル
-history.json*.bak
+# OS / Editor
+.DS_Store
+Thumbs.db

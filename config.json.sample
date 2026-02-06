@@ -1,5 +1,5 @@
 {
-    "version": "1.4.1",
+    "version": "1.5.0",
     "app_name": "Anima T2I WebUI",
     "server_name": "0.0.0.0",
     "server_port": 7867,
@@ -46,6 +46,7 @@
         "1216x832": [1216, 832]
     },
     "default_resolution": "1152x896",
+    "tags_csv_path": "danbooru_tags.csv",
     "history_file_path": "history.json",
     "external_link_name": "Catbox.moe",
     "external_link_url": "https://catbox.moe/"

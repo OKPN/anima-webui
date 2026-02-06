@@ -4,7 +4,7 @@ import pandas as pd
 
 # アプリのバージョン定数
 APP_NAME = "Anima T2I WebUI"
-VERSION = "1.4.1" # Update Version
+VERSION = "1.5.0" # Update Version
 CONFIG_FILE = "config.json"
 
 DEFAULT_CONFIG = {
@@ -38,6 +38,7 @@ DEFAULT_CONFIG = {
         "1216x832": [1216, 832]
     },
     "default_resolution": "1152x896",
+    "tags_csv_path": "danbooru_tags.csv",
     "external_link_name": "Catbox.moe",
     "external_link_url": "https://catbox.moe/"
 }
@@ -64,7 +65,7 @@ def save_config(config_data):
 # 【修正】引数に real_out_path を追加
 def update_and_save_config_v2(
     url, bat_path, backup_path, real_out_path,
-    q_list, q_def, d_list, d_def, t_list, t_def, m_list, m_def, s_list, s_def, c_list, c_def,
+    q_list, q_def, d_list, d_def, t_list, t_def, m_list, m_def, s_list, s_def, c_list, c_def, tags_path,
     res_df, neg_prompt, ext_name, ext_url
 ):
     try:
@@ -74,6 +75,7 @@ def update_and_save_config_v2(
         config["launch_bat"] = bat_path
         config["backup_output_dir"] = backup_path
         config["comfy_output_dir"] = real_out_path # 【追加】
+        config["tags_csv_path"] = tags_path
         config["default_negative_prompt"] = neg_prompt
         config["external_link_name"] = ext_name
         config["external_link_url"] = ext_url

@@ -7,6 +7,7 @@ import history_utils
 import ui_javascript
 import pandas as pd
 from urllib.parse import urlparse
+import os
 
 def create_ui(config):
     # --- 1. 設定の取得 ---
@@ -39,6 +40,35 @@ def create_ui(config):
 
     local_ip = system_manager.get_local_ip()
     detected_url = f"http://{local_ip}:8188"
+
+    # --- 2. タグデータのロード (オートコンプリート用) ---
+    tags_csv_path = config.get("tags_csv_path", "danbooru_tags.csv")
+    autocomplete_tags = []
+    
+    # デフォルトのサンプルタグ (CSVがない場合用)
+    sample_tags = ["1girl", "solo", "long hair", "short hair", "blue eyes", "red eyes", "smile", "looking at viewer", "standing", "sitting", "masterpiece", "best quality"]
+    
+    # 設定されたパスが存在せず、カレントディレクトリに danbooru_tags.csv がある場合はそれを優先利用する
+    if not os.path.exists(tags_csv_path) and os.path.exists("danbooru_tags.csv"):
+        tags_csv_path = "danbooru_tags.csv"
+
+    if os.path.exists(tags_csv_path):
+        try:
+            # CSVの1列目をタグ名として読み込む (ヘッダーなし想定、あるいはヘッダー処理を入れる)
+            # ここでは簡易的に pandas で読み込み、nameカラムがあればそれ、なければ1列目を使う
+            df = pd.read_csv(tags_csv_path)
+            if "name" in df.columns:
+                autocomplete_tags = df["name"].dropna().astype(str).tolist()
+            else:
+                autocomplete_tags = df.iloc[:, 0].dropna().astype(str).tolist()
+        except Exception as e:
+            print(f"⚠️ Failed to load tags.csv: {e}")
+            autocomplete_tags = sample_tags
+    else:
+        autocomplete_tags = sample_tags
+
+    # 上位20000件程度に絞る（ブラウザ負荷軽減のため）
+    autocomplete_tags = autocomplete_tags[:20000]
 
     # --- 3. UI定義 ---
     with gr.Blocks(title=f"{app_name} v{version}") as demo:
@@ -179,6 +209,7 @@ def create_ui(config):
                             value=config.get("comfy_output_dir", ""), 
                             placeholder="e.g. C:\\ComfyUI_windows\\ComfyUI\\output"
                         )
+                        tags_path_in = gr.Textbox(label="Tags CSV Filename", value=tags_csv_path, placeholder="e.g. danbooru_tags.csv")
                         backup_in = gr.Textbox(label="Backup Folder Path", value=config.get("backup_output_dir", ""))
                         
                         gr.Markdown("### 🏷️ Tag List Editor")
@@ -223,6 +254,9 @@ def create_ui(config):
         neg_btn_m_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(-1.0, "neg_prompt_input_area"))
         neg_btn_p_01.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(0.1, "neg_prompt_input_area"))
         neg_btn_p_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(1.0, "neg_prompt_input_area"))
+
+        # Autocomplete Injection (Load時に一度だけ実行)
+        demo.load(fn=None, inputs=[], outputs=[], js=ui_javascript.get_autocomplete_js(autocomplete_tags, ["prompt_input_area", "neg_prompt_input_area"]))
 
         # アプリロード時は「内部データのみ」最新化し、ギャラリー描画(重い処理)は避ける
         demo.load(fn=ui_handlers.load_history_state_only, inputs=None, outputs=[history_state, history_gallery, page_state, page_label])
@@ -291,7 +325,7 @@ def create_ui(config):
         backup_history_btn.click(fn=lambda: gr.update(value=ui_handlers.backup_history_action(config)), outputs=[history_msg])
 
         save_btn.click(fn=ui_handlers.handle_save_settings, 
-            inputs=[url_in, bat_in, backup_in, real_out_in, q_tags_edit, d_tags_edit, t_tags_edit, m_tags_edit, s_tags_edit, c_tags_edit, res_editor, neg_edit, gr.State(ext_link_name), gr.State(ext_link_url)], 
+            inputs=[url_in, bat_in, backup_in, real_out_in, q_tags_edit, d_tags_edit, t_tags_edit, m_tags_edit, s_tags_edit, c_tags_edit, tags_path_in, res_editor, neg_edit, gr.State(ext_link_name), gr.State(ext_link_url)], 
             outputs=[save_msg])
         
         refresh_btn.click(fn=ui_handlers.check_server_status, inputs=[url_in], outputs=[status_text])
