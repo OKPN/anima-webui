@@ -4,14 +4,14 @@ import pandas as pd
 
 # アプリのバージョン定数
 APP_NAME = "Anima T2I WebUI"
-VERSION = "1.5.0" # Update Version
+VERSION = "1.5.1" # Update Version
 CONFIG_FILE = "config.json"
 
 DEFAULT_CONFIG = {
     "version": VERSION,
     "app_name": APP_NAME,
     "server_name": "0.0.0.0",
-    "server_port": 7867,
+    "server_port": 7861,
     "comfy_url": "http://127.0.0.1:8188",
     "workflow_file": "anima-t2i.json",
     "launch_bat": "",

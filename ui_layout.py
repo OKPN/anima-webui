@@ -79,6 +79,8 @@ def create_ui(config):
         history_state = gr.State(raw_history_startup)
         selected_index = gr.State(-1)
         page_state = gr.State(0) # 現在のページ番号 (0始まり)
+        show_favs_state = gr.State(False) # お気に入りフィルタ状態
+        history_first_visit = gr.State(True) # 初回訪問フラグ
         
         # Handlers 用の State
         config_state = gr.State(config)
@@ -149,13 +151,16 @@ def create_ui(config):
                         restart_btn_adv = gr.Button(f"♻️ Restart App", variant="secondary")
                         gr.Markdown(f"### [🔗 {ext_link_name}]({ext_link_url})")
 
-            with gr.Tab("History", id=1):
+            with gr.Tab("History", id=1) as history_tab:
+                history_url_warning = gr.Markdown(visible=False)
+                
                 # ページネーション UI
                 with gr.Row(variant="compact"):
                     refresh_history_btn = gr.Button("🔄 Refresh", scale=1)
                     prev_btn = gr.Button("◀️ Prev", scale=1)
                     page_label = gr.Textbox(value="Page 1 / 1", interactive=False, show_label=False, scale=2, text_align="center")
                     next_btn = gr.Button("Next ▶️", scale=1)
+                    fav_filter_btn = gr.Button("❤ Favorites Only", scale=1)
                 
                 # 初期値としてサーバー起動時の最新データをセット（ページネーション適用済み）
                 history_gallery = gr.Gallery(label="Past Generations", columns=4, height="auto", value=ui_handlers.get_gallery_display_data(raw_history_startup, config, 0))
@@ -177,6 +182,7 @@ def create_ui(config):
                 download_original_file = gr.File(label="Download Original Image", visible=False)
                 
                 with gr.Row():
+                    fav_btn = gr.Button("🤍 Like", visible=False, scale=1)
                     restore_btn = gr.Button("♻️ Restore & Go", variant="primary", scale=2, visible=False)
                     delete_entry_btn = gr.Button("🗑️ Delete", variant="stop", visible=False, scale=1)
                     with gr.Row(visible=False) as confirm_delete_row:
@@ -201,16 +207,22 @@ def create_ui(config):
                         gr.Markdown("### 🛠 ComfyUI Server Control")
                         url_in = gr.Textbox(label="ComfyUI URL", value=comfy_url)
                         copy_ip_btn = gr.Button(f"📋 Set Detected IP: {detected_url}", size="sm")
+                        ip_set_msg = gr.Markdown("", visible=False)
                         bat_in = gr.Textbox(label="Launch Batch Path", value=config.get("launch_bat"))
                         
                         gr.Markdown("#### 📂 File Path Settings")
                         real_out_in = gr.Textbox(
                             label="ComfyUI Output Path (Absolute Path)", 
                             value=config.get("comfy_output_dir", ""), 
-                            placeholder="e.g. C:\\ComfyUI_windows\\ComfyUI\\output"
+                            placeholder="e.g. C:\\ComfyUI_windows\\ComfyUI\\output",
+                            info="お使いのComfyUIのoutputフォルダのパスを指定してください"
                         )
                         tags_path_in = gr.Textbox(label="Tags CSV Filename", value=tags_csv_path, placeholder="e.g. danbooru_tags.csv")
-                        backup_in = gr.Textbox(label="Backup Folder Path", value=config.get("backup_output_dir", ""))
+                        backup_in = gr.Textbox(
+                            label="Backup Folder Path", 
+                            value=config.get("backup_output_dir", ""),
+                            info="画像の移行先のパスを入力すると、引き続き履歴の追跡が行えます"
+                        )
                         
                         gr.Markdown("### 🏷️ Tag List Editor")
                         
@@ -262,12 +274,15 @@ def create_ui(config):
         demo.load(fn=ui_handlers.load_history_state_only, inputs=None, outputs=[history_state, history_gallery, page_state, page_label])
         
         # 手動リフレッシュボタン
-        refresh_history_btn.click(fn=ui_handlers.load_latest_history_on_load, inputs=None, outputs=[history_state, history_gallery, page_state, page_label])
+        refresh_history_btn.click(fn=ui_handlers.load_latest_history_on_load, inputs=None, outputs=[history_state, history_gallery, page_state, page_label, show_favs_state, fav_filter_btn, history_url_warning])
         
         refresh_btn_adv.click(fn=ui_handlers.check_server_status, inputs=[url_in], outputs=[status_output])
         launch_btn_adv.click(fn=ui_handlers.launch_server, inputs=[bat_in, url_in], outputs=[status_output])
         
-        copy_ip_btn.click(fn=lambda: (gr.update(value=detected_url)), outputs=[url_in])
+        copy_ip_btn.click(
+            fn=lambda: (gr.update(value=detected_url), gr.update(value="✅ 反映させるには、**Save All Settings** で保存し、**Restart App** ボタンを押したあと、ブラウザをリロードしてください", visible=True)),
+            outputs=[url_in, ip_set_msg]
+        )
         res_preset.change(fn=lambda p: RESOLUTION_PRESETS.get(p, [gr.update(), gr.update()]), inputs=[res_preset], outputs=[width_slider, height_slider])
         
         predict_params = dict(
@@ -281,7 +296,7 @@ def create_ui(config):
         
         history_gallery.select(
             fn=ui_handlers.on_image_select, 
-            inputs=[history_state, page_state, config_state], 
+            inputs=[history_state, page_state, config_state, show_favs_state], 
             outputs=[
                 selected_index, 
                 h_q_tags, h_d_tags, h_p_tags, h_m_tags, h_s_tags, h_c_tags, 
@@ -291,7 +306,8 @@ def create_ui(config):
                 tag_accordion,
                 selected_prompt_preview,
                 neg_accordion,
-                download_original_file
+                download_original_file,
+                fav_btn
             ]
         )
         
@@ -304,14 +320,15 @@ def create_ui(config):
         no_delete_btn.click(fn=lambda: (gr.update(visible=True), gr.update(visible=False)), outputs=[delete_entry_btn, confirm_delete_row])
         
         yes_delete_btn.click(fn=ui_handlers.handle_delete_entry, 
-            inputs=[selected_index, history_state, page_state], 
+            inputs=[selected_index, history_state, page_state, show_favs_state], 
             outputs=[
                 history_state, history_gallery, selected_index, 
                 h_q_tags, h_d_tags, h_p_tags, h_m_tags, h_s_tags, h_c_tags, 
                 selected_prompt_preview, h_neg_prompt,
                 delete_entry_btn, confirm_delete_row, restore_btn, 
                 tag_accordion, selected_prompt_preview, neg_accordion, page_state, page_label,
-                download_original_file
+                download_original_file,
+                fav_btn
             ]
         )
         
@@ -320,7 +337,7 @@ def create_ui(config):
         no_clear_btn.click(fn=lambda: (gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)), 
                                 outputs=[clear_history_btn, clear_history_notice, confirm_clear_row]) 
         yes_clear_btn.click(fn=ui_handlers.handle_clear_history, inputs=[history_state], 
-                                outputs=[history_state, history_gallery, selected_prompt_preview, clear_history_notice, confirm_clear_row, clear_history_btn, page_state, page_label, download_original_file])
+                                outputs=[history_state, history_gallery, selected_prompt_preview, clear_history_notice, confirm_clear_row, clear_history_btn, page_state, page_label, download_original_file, fav_btn])
         
         backup_history_btn.click(fn=lambda: gr.update(value=ui_handlers.backup_history_action(config)), outputs=[history_msg])
 
@@ -330,13 +347,37 @@ def create_ui(config):
         
         refresh_btn.click(fn=ui_handlers.check_server_status, inputs=[url_in], outputs=[status_text])
         launch_btn.click(fn=ui_handlers.launch_server, inputs=[bat_in, url_in], outputs=[status_text])
-        restart_btn.click(fn=lambda: ui_handlers.restart_app(app_name))
+        
+        restart_js = """
+        () => {
+            setTimeout(() => {
+                alert("ブラウザをリロードしてください");
+            }, 5000);
+        }
+        """
+        restart_btn.click(fn=lambda: ui_handlers.restart_app(app_name), js=restart_js)
         
         # ページネーションイベント
-        prev_btn.click(fn=ui_handlers.prev_page, inputs=[page_state, history_state, config_state], outputs=[page_state, history_gallery, page_label])
-        next_btn.click(fn=ui_handlers.next_page, inputs=[page_state, history_state, config_state], outputs=[page_state, history_gallery, page_label])
+        prev_btn.click(fn=ui_handlers.prev_page, inputs=[page_state, history_state, config_state, show_favs_state], outputs=[page_state, history_gallery, page_label])
+        next_btn.click(fn=ui_handlers.next_page, inputs=[page_state, history_state, config_state, show_favs_state], outputs=[page_state, history_gallery, page_label])
+
+        # お気に入り機能イベント
+        fav_btn.click(fn=ui_handlers.toggle_favorite, 
+                      inputs=[selected_index, history_state, config_state, show_favs_state, page_state], 
+                      outputs=[fav_btn, history_state, history_gallery, page_label])
+        
+        fav_filter_btn.click(fn=ui_handlers.toggle_fav_filter,
+                             inputs=[show_favs_state, history_state, config_state],
+                             outputs=[show_favs_state, history_gallery, page_state, page_label, fav_filter_btn])
+
+        # Historyタブ初回切り替え時の自動リフレッシュ
+        history_tab.select(
+            fn=ui_handlers.on_history_tab_select,
+            inputs=[history_first_visit],
+            outputs=[history_state, history_gallery, page_state, page_label, show_favs_state, fav_filter_btn, history_first_visit, history_url_warning]
+        )
 
         # 【追加】GenerateタブのRestart Appボタンにもイベントを紐付け
-        restart_btn_adv.click(fn=lambda: ui_handlers.restart_app(app_name))
+        restart_btn_adv.click(fn=lambda: ui_handlers.restart_app(app_name), js=restart_js)
         
     return demo
