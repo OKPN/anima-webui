@@ -1,4 +1,4 @@
-🎨 Anima WebUI <small>v1.5.0</small>
+🎨 Anima WebUI <small>v1.5.1</small>
 
 Anima WebUI は、ComfyUI をバックエンドとして利用し、直感的な操作で高品質な画像生成を行うための Gradio ベースの Web UI です。 v1.5.0 では、プロンプト入力時の**「アンダースコア自動置換機能」**を追加し、Danbooruタグの入力がよりスムーズになりました。
 🎯 想定するユーザ層
@@ -19,9 +19,8 @@ Anima WebUI は、ComfyUI をバックエンドとして利用し、直感的な
 
     モデル & ワークフローの導入
 
-        モデルファイル: models/checkpoints/ フォルダへ配置してください。
-
-        ワークフローファイル: anima-t2i.json を本アプリのルートフォルダに配置してください。
+        必要なモデルは https://huggingface.co/circlestone-labs/Anima からダウンロードできます。
+        anima-t2i.json を ComfyUI ブラウザ画面に D&D し、ワークフローのモデル読み込み部分に書いてある通りのフォルダ位置にモデルを配置し、ComfyUI で画像が生成できることを確認してください。
 
 🚀 セットアップと起動手順
 
@@ -38,6 +37,9 @@ Anima WebUI は、ComfyUI をバックエンドとして利用し、直感的な
     起動
 
         start_anima_webui.bat を実行します。
+        コンソールを見て起動を確認したら、 localhost:7861 にアクセスしてください。
+        起動後、Systemタブに移動し、ComfyUI Output Path (Absolute Path)にお使いのComfyUIのoutputフォルダの絶対パスをコピーして設定を保存してください。これで最低限の生成環境が整います。
+    
 
 💡 主な機能 (v1.4.0)
 タブ名	機能概要
@@ -77,6 +79,8 @@ IP 自動検出: PC のローカル IP を検出し、外部デバイスから�
     削除の安全弁: 「Clear History」を実行すると、元の history.json は削除直前に日付入りの .bak ファイルとして複製保存されます。
 
 📈 Version History
+    v1.5.1 : 履歴のお気に入り機能を追加。軽微な修正。
+
     v1.5.0 : プロンプト内のアンダースコア `_` を自動的にスペースに置換する機能を追加（`score_` タグを除く）。オートコンプリート機能の強化。
 
     v1.4.1 : プロンプトの強調ボタンを追加。UIレイアウトの微調整。

@@ -156,6 +156,16 @@ def backup_history(config):
             return False, f"Backup failed: {e}"
     return False, "History file not found."
 
+def save_history_json(config, history):
+    path = get_history_path(config)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=4, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"❌ Failed to save history: {e}")
+        return False
+
 def delete_history_entry(config, history, index):
     try:
         index = int(index)

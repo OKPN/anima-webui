@@ -144,10 +144,19 @@ def get_autocomplete_js(all_tags, target_ids):
 
         function setupAutocomplete(targetId) {{
             const container = document.querySelector('#' + targetId);
-            if (!container) return;
+            if (!container) {{
+                setTimeout(() => setupAutocomplete(targetId), 500);
+                return;
+            }}
             
             const textarea = container.querySelector("textarea");
-            if (!textarea) return;
+            if (!textarea) {{
+                setTimeout(() => setupAutocomplete(targetId), 500);
+                return;
+            }}
+
+            if (textarea.dataset.acInitialized) return;
+            textarea.dataset.acInitialized = "true";
 
             // 候補表示用のリスト要素を作成
             const suggestionBox = document.createElement("ul");
