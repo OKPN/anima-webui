@@ -143,7 +143,7 @@ def create_ui(config):
                             sampler_dropdown = gr.Dropdown(label="Sampler", choices=["er_sde", "euler_ancestral", "res_multistep"], value="euler_ancestral")
                             res_preset = gr.Dropdown(label="Resolution Preset", choices=list(RESOLUTION_PRESETS.keys()) + ["Custom"], value=default_res_key)
                             cfg_slider = gr.Slider(label="CFG", minimum=1.0, maximum=20.0, value=5.0, step=0.1)
-                            steps_slider = gr.Slider(label="Steps", minimum=1, maximum=100, value=50, step=1)
+                            steps_slider = gr.Slider(label="Steps", minimum=1, maximum=100, value=30, step=1)
                             with gr.Row():
                                 width_slider = gr.Slider(label="Width", minimum=512, maximum=2048, value=default_w, step=64); height_slider = gr.Slider(label="Height", minimum=512, maximum=2048, value=default_h, step=64)
                         with gr.Row():
@@ -217,14 +217,21 @@ def create_ui(config):
                             placeholder="e.g. C:\\ComfyUI_windows\\ComfyUI\\output",
                             info="お使いのComfyUIのoutputフォルダのパスを指定してください"
                         )
-                        tags_path_in = gr.Textbox(label="Tags CSV Filename", value=tags_csv_path, placeholder="e.g. danbooru_tags.csv")
                         backup_in = gr.Textbox(
                             label="Backup Folder Path", 
                             value=config.get("backup_output_dir", ""),
                             info="画像の移行先のパスを入力すると、引き続き履歴の追跡が行えます"
                         )
+                        workflow_file_in = gr.Textbox(
+                            label="Workflow Filename",
+                            value=workflow_file,
+                            placeholder="e.g. anima-t2i.json",
+                            info="使用するワークフローのJSONファイル名を指定してください"
+                        )
+                        tags_path_in = gr.Textbox(label="Tags CSV Filename", value=tags_csv_path, placeholder="e.g. danbooru_tags.csv")
                         
                         gr.Markdown("### 🏷️ Tag List Editor")
+                        gr.Markdown("タグの先頭に+を付けることで初期有効タグにすることができます")
                         
                         # タグ表示用ヘルパー (lambdaで十分なのでここに残すか、handlersに移動も可だが、UI構築時のみ使用なのでここで定義)
                         format_tags = lambda full, default: ", ".join([(f"+{t}" if t in default else t) for t in full])
@@ -342,7 +349,7 @@ def create_ui(config):
         backup_history_btn.click(fn=lambda: gr.update(value=ui_handlers.backup_history_action(config)), outputs=[history_msg])
 
         save_btn.click(fn=ui_handlers.handle_save_settings, 
-            inputs=[url_in, bat_in, backup_in, real_out_in, q_tags_edit, d_tags_edit, t_tags_edit, m_tags_edit, s_tags_edit, c_tags_edit, tags_path_in, res_editor, neg_edit, gr.State(ext_link_name), gr.State(ext_link_url)], 
+            inputs=[url_in, bat_in, backup_in, real_out_in, workflow_file_in, q_tags_edit, d_tags_edit, t_tags_edit, m_tags_edit, s_tags_edit, c_tags_edit, tags_path_in, res_editor, neg_edit, gr.State(ext_link_name), gr.State(ext_link_url)], 
             outputs=[save_msg])
         
         refresh_btn.click(fn=ui_handlers.check_server_status, inputs=[url_in], outputs=[status_text])

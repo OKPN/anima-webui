@@ -61,7 +61,7 @@ def process_underscores(text):
             processed_tags.append(t.replace("_", " "))
     return ", ".join(processed_tags)
 
-def handle_save_settings(url, bat_path, backup_path, real_out_path, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, c_tags_str, tags_path, res_df, neg_prompt, ext_name, ext_url):
+def handle_save_settings(url, bat_path, backup_path, real_out_path, workflow_file, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, c_tags_str, tags_path, res_df, neg_prompt, ext_name, ext_url):
     q_list, q_def = parse_tagged_str(q_tags_str)
     d_list, d_def = parse_tagged_str(d_tags_str)
     t_list, t_def = parse_tagged_str(t_tags_str)
@@ -70,7 +70,7 @@ def handle_save_settings(url, bat_path, backup_path, real_out_path, q_tags_str, 
     c_list, c_def = parse_tagged_str(c_tags_str)
     
     success = config_utils.update_and_save_config_v2(
-        url, bat_path, backup_path, real_out_path, 
+        url, bat_path, backup_path, real_out_path, workflow_file,
         q_list, q_def, d_list, d_def, t_list, t_def, m_list, m_def, s_list, s_def, c_list, c_def, tags_path,
         res_df, neg_prompt, ext_name, ext_url
     )

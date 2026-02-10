@@ -14,3 +14,7 @@ thumbnails/
 # OS / Editor
 .DS_Store
 Thumbs.db
+
+# Workflows
+anima-t2i*.json
+!anima-t2i.json
