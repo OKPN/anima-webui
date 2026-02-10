@@ -6,6 +6,7 @@ import datetime # 【追加】現在時刻を取得するために必要
 
 def generate_and_save(
     prompt, neg_prompt, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
+    l1_name, l1_str, l2_name, l2_str,
     quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, 
     decade_tags, period_tags, meta_tags, safety_tags, custom_tags, 
     current_comfy_url, workflow_file, config
@@ -57,6 +58,38 @@ def generate_and_save(
             "steps": int(steps), 
             "sampler_name": sampler_name
         })
+    
+    # 【変更】LoRA設定 (動的検索ロジック)
+    def find_node_by_class(wf, class_name):
+        for nid, node in wf.items():
+            if node.get("class_type") == class_name:
+                return nid
+        return None
+
+    def find_connected_lora(wf, source_nid):
+        if not source_nid: return None
+        for nid, node in wf.items():
+            if node.get("class_type") == "LoraLoader":
+                inputs = node.get("inputs", {})
+                model_link = inputs.get("model")
+                if model_link and isinstance(model_link, list) and len(model_link) > 0:
+                    if str(model_link[0]) == str(source_nid):
+                        return nid
+        return None
+
+    ckpt_id = find_node_by_class(workflow, "CheckpointLoaderSimple") or find_node_by_class(workflow, "CheckpointLoader")
+    lora1_id = find_connected_lora(workflow, ckpt_id)
+    lora2_id = find_connected_lora(workflow, lora1_id)
+
+    if lora1_id and l1_name and l1_name != "None":
+        workflow[lora1_id]["inputs"]["lora_name"] = l1_name
+        workflow[lora1_id]["inputs"]["strength_model"] = float(l1_str)
+        workflow[lora1_id]["inputs"]["strength_clip"] = float(l1_str)
+
+    if lora2_id and l2_name and l2_name != "None":
+        workflow[lora2_id]["inputs"]["lora_name"] = l2_name
+        workflow[lora2_id]["inputs"]["strength_model"] = float(l2_str)
+        workflow[lora2_id]["inputs"]["strength_clip"] = float(l2_str)
 
     # 【追加】ファイル名（プレフィックス）を現在時刻で上書きする処理
     if save_node_id:

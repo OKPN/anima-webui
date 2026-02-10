@@ -8,6 +8,34 @@ import ui_javascript
 import pandas as pd
 from urllib.parse import urlparse
 import os
+import glob
+
+def get_lora_list(config):
+    """ComfyUIのmodels/lorasフォルダからLoRAファイル一覧を取得する"""
+    loras = ["None"]
+    bat_path = config.get("launch_bat")
+    if bat_path:
+        # バッチファイルの場所から ComfyUI/models/loras を推測
+        base_dir = os.path.dirname(bat_path)
+        # 一般的な構成: ComfyUI_windows/ComfyUI/models/loras または ComfyUI/models/loras
+        # バッチが ComfyUIフォルダ直下にあるか、その親にあるかで分岐
+        possible_paths = [
+            os.path.join(base_dir, "models", "loras"),
+            os.path.join(base_dir, "ComfyUI", "models", "loras"),
+        ]
+        for p in possible_paths:
+            if os.path.exists(p):
+                files = glob.glob(os.path.join(p, "**", "*.safetensors"), recursive=True)
+                loras += [os.path.relpath(f, p) for f in files]
+                break
+    
+    # 取得できなかった場合のデフォルト候補
+    if len(loras) == 1:
+        loras.append("Berengaria_Unicorn_Overlord_XL.safetensors")
+
+    # ユーザーリクエストに応じて候補を追加
+    loras.append("wkamura.safetensor")
+    return sorted(list(set(loras)))
 
 def create_ui(config):
     # --- 1. 設定の取得 ---
@@ -40,6 +68,9 @@ def create_ui(config):
 
     local_ip = system_manager.get_local_ip()
     detected_url = f"http://{local_ip}:8188"
+
+    # LoRAリストの取得
+    lora_files = get_lora_list(config)
 
     # --- 2. タグデータのロード (オートコンプリート用) ---
     tags_csv_path = config.get("tags_csv_path", "danbooru_tags.csv")
@@ -139,6 +170,18 @@ def create_ui(config):
                         with gr.Row():
                             seed_input = gr.Number(label="Seed", value=0, precision=0, scale=3)
                             randomize_seed = gr.Checkbox(label="Randomize Seed", value=True, scale=1)
+                        
+                        # LoRA Settings (Advanced Settingsの上に配置)
+                        with gr.Accordion("LoRA Settings", open=False):
+                            with gr.Row():
+                                with gr.Column():
+                                    l1_name = gr.Dropdown(label="LoRA 1 Model", choices=lora_files, value="None")
+                                    l1_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=1.0)
+                            with gr.Row():
+                                with gr.Column():
+                                    l2_name = gr.Dropdown(label="LoRA 2 Model", choices=lora_files, value="None")
+                                    l2_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=1.0)
+
                         with gr.Accordion("Advanced Settings", open=False):
                             sampler_dropdown = gr.Dropdown(label="Sampler", choices=["er_sde", "euler_ancestral", "res_multistep"], value="euler_ancestral")
                             res_preset = gr.Dropdown(label="Resolution Preset", choices=list(RESOLUTION_PRESETS.keys()) + ["Custom"], value=default_res_key)
@@ -295,7 +338,7 @@ def create_ui(config):
         predict_params = dict(
             fn=ui_handlers.predict, 
             inputs=[prompt_input, neg_input, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, history_state, 
-                    quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, 
+                    l1_name, l1_str, l2_name, l2_str, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, 
                     custom_tags_input, url_in, config_state, workflow_file_state], 
             outputs=[image_output, status_output, history_state, history_gallery, page_state, page_label]
         )

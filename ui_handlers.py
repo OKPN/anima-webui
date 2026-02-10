@@ -76,7 +76,7 @@ def handle_save_settings(url, bat_path, backup_path, real_out_path, workflow_fil
     )
     return "✅ 保存完了。再起動後に反映されます。" if success else "❌ 保存失敗。"
 
-def predict(prompt, neg_prompt, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, quality_tags, 
+def predict(prompt, neg_prompt, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, l1_name, l1_str, l2_name, l2_str, quality_tags, 
             y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, custom_tags, current_comfy_url,
             config, workflow_file):
     
@@ -86,6 +86,7 @@ def predict(prompt, neg_prompt, seed, randomize_seed, cfg, steps, width, height,
 
     output_image, status, saved_entry = generation_manager.generate_and_save(
         prompt, neg_prompt, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
+        l1_name, l1_str, l2_name, l2_str,
         quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, 
         decade_tags, period_tags, meta_tags, safety_tags, custom_tags, 
         current_comfy_url, workflow_file, config
