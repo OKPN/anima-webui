@@ -29,12 +29,8 @@ def get_lora_list(config):
                 loras += [os.path.relpath(f, p) for f in files]
                 break
     
-    # 取得できなかった場合のデフォルト候補
-    if len(loras) == 1:
-        loras.append("Berengaria_Unicorn_Overlord_XL.safetensors")
-
     # ユーザーリクエストに応じて候補を追加
-    loras.append("wkamura.safetensor")
+    loras.append("wkamura.safetensors")
     return sorted(list(set(loras)))
 
 def create_ui(config):
