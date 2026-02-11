@@ -59,37 +59,48 @@ def generate_and_save(
             "sampler_name": sampler_name
         })
     
-    # 【変更】LoRA設定 (動的検索ロジック)
-    def find_node_by_class(wf, class_name):
-        for nid, node in wf.items():
-            if node.get("class_type") == class_name:
-                return nid
-        return None
+    # 【変更】LoRA設定 (全探索ロジック)
+    # 接続関係に依存せず、ワークフロー内のLoRAノードを全て取得して制御する
+    lora_nodes = []
+    for nid, node in workflow.items():
+        if not isinstance(node, dict): continue
+        class_type = node.get("class_type", "")
+        title = node.get("_meta", {}).get("title", "")
+        
+        # クラス名またはタイトルでLoRAノードを判定
+        if "LoraLoader" in class_type or "LoRA" in title:
+            lora_nodes.append(nid)
+    
+    # ID順にソートして、UIのLoRA1, LoRA2と対応させる
+    try:
+        lora_nodes.sort(key=lambda x: int(x))
+    except ValueError:
+        lora_nodes.sort()
+        
+    lora1_id = lora_nodes[0] if len(lora_nodes) > 0 else None
+    lora2_id = lora_nodes[1] if len(lora_nodes) > 1 else None
+    
+    # LoRA 1 設定
+    if lora1_id:
+        if l1_name and l1_name != "None":
+            workflow[lora1_id]["inputs"]["lora_name"] = l1_name
+            workflow[lora1_id]["inputs"]["strength_model"] = float(l1_str)
+            workflow[lora1_id]["inputs"]["strength_clip"] = float(l1_str)
+        else:
+            # Noneが選択されている場合は強度0で無効化
+            workflow[lora1_id]["inputs"]["strength_model"] = 0.0
+            workflow[lora1_id]["inputs"]["strength_clip"] = 0.0
 
-    def find_connected_lora(wf, source_nid):
-        if not source_nid: return None
-        for nid, node in wf.items():
-            if node.get("class_type") == "LoraLoader":
-                inputs = node.get("inputs", {})
-                model_link = inputs.get("model")
-                if model_link and isinstance(model_link, list) and len(model_link) > 0:
-                    if str(model_link[0]) == str(source_nid):
-                        return nid
-        return None
-
-    ckpt_id = find_node_by_class(workflow, "CheckpointLoaderSimple") or find_node_by_class(workflow, "CheckpointLoader")
-    lora1_id = find_connected_lora(workflow, ckpt_id)
-    lora2_id = find_connected_lora(workflow, lora1_id)
-
-    if lora1_id and l1_name and l1_name != "None":
-        workflow[lora1_id]["inputs"]["lora_name"] = l1_name
-        workflow[lora1_id]["inputs"]["strength_model"] = float(l1_str)
-        workflow[lora1_id]["inputs"]["strength_clip"] = float(l1_str)
-
-    if lora2_id and l2_name and l2_name != "None":
-        workflow[lora2_id]["inputs"]["lora_name"] = l2_name
-        workflow[lora2_id]["inputs"]["strength_model"] = float(l2_str)
-        workflow[lora2_id]["inputs"]["strength_clip"] = float(l2_str)
+    # LoRA 2 設定
+    if lora2_id:
+        if l2_name and l2_name != "None":
+            workflow[lora2_id]["inputs"]["lora_name"] = l2_name
+            workflow[lora2_id]["inputs"]["strength_model"] = float(l2_str)
+            workflow[lora2_id]["inputs"]["strength_clip"] = float(l2_str)
+        else:
+            # Noneが選択されている場合は強度0で無効化
+            workflow[lora2_id]["inputs"]["strength_model"] = 0.0
+            workflow[lora2_id]["inputs"]["strength_clip"] = 0.0
 
     # 【追加】ファイル名（プレフィックス）を現在時刻で上書きする処理
     if save_node_id:

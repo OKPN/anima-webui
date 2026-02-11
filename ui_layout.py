@@ -7,31 +7,49 @@ import history_utils
 import ui_javascript
 import pandas as pd
 from urllib.parse import urlparse
+import requests
 import os
 import glob
 
 def get_lora_list(config):
-    """ComfyUIのmodels/lorasフォルダからLoRAファイル一覧を取得する"""
+    """ComfyUIから利用可能なLoRAのリストを取得する。API経由を試み、失敗した場合はファイルシステムをスキャンする。"""
     loras = ["None"]
     bat_path = config.get("launch_bat")
-    if bat_path:
-        # バッチファイルの場所から ComfyUI/models/loras を推測
-        base_dir = os.path.dirname(bat_path)
-        # 一般的な構成: ComfyUI_windows/ComfyUI/models/loras または ComfyUI/models/loras
-        # バッチが ComfyUIフォルダ直下にあるか、その親にあるかで分岐
-        possible_paths = [
-            os.path.join(base_dir, "models", "loras"),
-            os.path.join(base_dir, "ComfyUI", "models", "loras"),
-        ]
-        for p in possible_paths:
-            if os.path.exists(p):
-                files = glob.glob(os.path.join(p, "**", "*.safetensors"), recursive=True)
-                loras += [os.path.relpath(f, p) for f in files]
-                break
+    comfy_url = config.get("comfy_url", "").strip().rstrip("/")
+
+    # 1. API経由での取得を試みる
+    if comfy_url:
+        try:
+            response = requests.get(f"{comfy_url}/models/loras", timeout=2)
+            response.raise_for_status()
+            loras.extend(response.json())
+            print("✅ LoRA list fetched from ComfyUI API.")
+        except requests.exceptions.RequestException as e:
+            print(f"⚠️ Could not fetch LoRA list from API ({e}), falling back to file scan.")
+            # APIからの取得に失敗した場合、ファイルシステムスキャンにフォールバック
+            if bat_path:
+                base_dir = os.path.dirname(bat_path)
+                possible_paths = [
+                    os.path.join(base_dir, "models", "loras"),
+                    os.path.join(base_dir, "ComfyUI", "models", "loras"),
+                ]
+                for p in possible_paths:
+                    if os.path.exists(p):
+                        files = glob.glob(os.path.join(p, "**", "*.safetensors"), recursive=True)
+                        loras += [os.path.relpath(f, p) for f in files]
+                        break
     
     # ユーザーリクエストに応じて候補を追加
     loras.append("wkamura.safetensors")
     return sorted(list(set(loras)))
+
+def update_lora_strength(name, current_str):
+    """LoRA選択時に強度を自動調整する"""
+    if name == "None":
+        return 0.0
+    if current_str == 0.0:
+        return 1.0
+    return current_str
 
 def create_ui(config):
     # --- 1. 設定の取得 ---
@@ -172,11 +190,11 @@ def create_ui(config):
                             with gr.Row():
                                 with gr.Column():
                                     l1_name = gr.Dropdown(label="LoRA 1 Model", choices=lora_files, value="None")
-                                    l1_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=1.0)
+                                    l1_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
                             with gr.Row():
                                 with gr.Column():
                                     l2_name = gr.Dropdown(label="LoRA 2 Model", choices=lora_files, value="None")
-                                    l2_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=1.0)
+                                    l2_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
 
                         with gr.Accordion("Advanced Settings", open=False):
                             sampler_dropdown = gr.Dropdown(label="Sampler", choices=["er_sde", "euler_ancestral", "res_multistep"], value="euler_ancestral")
@@ -312,6 +330,10 @@ def create_ui(config):
         neg_btn_m_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(-1.0, "neg_prompt_input_area"))
         neg_btn_p_01.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(0.1, "neg_prompt_input_area"))
         neg_btn_p_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(1.0, "neg_prompt_input_area"))
+
+        # LoRA Auto-Strength Events
+        l1_name.change(fn=update_lora_strength, inputs=[l1_name, l1_str], outputs=l1_str)
+        l2_name.change(fn=update_lora_strength, inputs=[l2_name, l2_str], outputs=l2_str)
 
         # Autocomplete Injection (Load時に一度だけ実行)
         demo.load(fn=None, inputs=[], outputs=[], js=ui_javascript.get_autocomplete_js(autocomplete_tags, ["prompt_input_area", "neg_prompt_input_area"]))
