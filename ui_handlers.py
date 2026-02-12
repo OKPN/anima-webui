@@ -120,7 +120,7 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
         return [
             -1, "", "", "", "", "", "", "", "", 
             gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), 
-            gr.update(visible=False), gr.update(visible=False), gr.update(visible=False),
+            gr.update(visible=False), gr.update(visible=False),
             gr.update(visible=False, value=None),
             gr.update(visible=False) # fav_btn
         ]
@@ -142,11 +142,14 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
     s = ", ".join(item.get("safety_tags", []))
     c = ", ".join(item.get("custom_tags", []))
     
+    lora1_name = item.get("lora1_name", "None")
+    lora1_strength = item.get("lora1_strength", 0.0)
     original_image_path = history_utils.resolve_image_path(item, config)
     
     is_fav = item.get("is_favorite", False)
     fav_label = "❤ Liked" if is_fav else "🤍 Like"
     fav_variant = "primary" if is_fav else "secondary"
+    
     
     return [
         real_index,
@@ -154,6 +157,8 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
         item.get("prompt", ""),
         item.get("neg_prompt", ""),
         gr.update(visible=True),  # Delete
+        lora1_name,
+        lora1_strength,
         gr.update(visible=False), # Confirm
         gr.update(visible=True),  # Restore
         gr.update(visible=True),  # TagAccordion
@@ -164,17 +169,21 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
     ]
 
 def restore_from_history_by_index(idx, history):
-    if idx < 0 or not history or idx >= len(history): return [gr.update()] * 22
+    if idx < 0 or not history or idx >= len(history): return [gr.update()] * 26
     s = history[idx]
     return (
-        s["prompt"], s["neg_prompt"], s["seed"], True, s["cfg"], s["steps"], s["width"], s["height"], 
+        s["prompt"], s["neg_prompt"], s["seed"], True, s["cfg"], s["steps"], s["width"], s["height"],
+
         s.get("sampler_name", "euler_ancestral"), s.get("quality_tags", []),
         s.get("y1_en", False), s.get("y1_val", "2026"), s.get("y2_en", False), s.get("y2_val", "2025"),
         s.get("y3_en", False), s.get("y3_val", "2024"),
         s.get("decade_tags", []), s.get("period_tags", []), s.get("meta_tags", []), s.get("safety_tags", []),
-        s.get("custom_tags", []), gr.update(selected=0)
+        s.get("custom_tags", []), gr.update(selected=0),
+        s.get("lora1_name", "None"),
+        float(s.get("lora1_strength", 0.0)),
+        s.get("lora2_name", "None"),
+        float(s.get("lora2_strength", 0.0))
     )
-
 def check_url_warning(config):
     current_url = config.get("comfy_url", "")
     local_ip = system_manager.get_local_ip()

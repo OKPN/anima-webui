@@ -126,7 +126,9 @@ def generate_and_save(
             "y2_en": y2_en, "y2_val": y2_val, "y3_en": y3_en, "y3_val": y3_val,
             "decade_tags": decade_tags, "period_tags": period_tags, "meta_tags": meta_tags, 
             "safety_tags": safety_tags, "custom_tags": custom_tags,
-            "caption": f"Seed: {final_seed} | {sampler_name}"
+            "caption": f"Seed: {final_seed} | {sampler_name}",
+            "lora1_name": l1_name, "lora1_strength": l1_str,
+            "lora2_name": l2_name, "lora2_strength": l2_str
         }
 
         # 8. 履歴への追加実行

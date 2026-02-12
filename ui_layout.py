@@ -232,6 +232,10 @@ def create_ui(config):
                     h_c_tags = gr.Textbox(label="Custom Tags", interactive=False, lines=2)
                 
                 selected_prompt_preview = gr.Textbox(label="Selected Image Prompt", placeholder="Select image...", interactive=False, lines=2, visible=False)
+
+                # HistoryタブにLoRA情報を表示するためのUIを追加
+                h_lora1_name = gr.Textbox(label="LoRA 1 Model", interactive=False)
+                h_lora1_strength = gr.Number(label="LoRA 1 Strength", interactive=False)
                 
                 with gr.Accordion("Applied Negative Prompt", open=False, visible=False) as neg_accordion:
                     h_neg_prompt = gr.Textbox(show_label=False, interactive=False, lines=2)
@@ -369,6 +373,7 @@ def create_ui(config):
                 selected_index, 
                 h_q_tags, h_d_tags, h_p_tags, h_m_tags, h_s_tags, h_c_tags, 
                 selected_prompt_preview, h_neg_prompt,
+                h_lora1_name, h_lora1_strength,
                 delete_entry_btn, confirm_delete_row,
                 restore_btn,
                 tag_accordion,
@@ -379,14 +384,16 @@ def create_ui(config):
             ]
         )
         
-        restore_btn.click(fn=ui_handlers.restore_from_history_by_index, inputs=[selected_index, history_state], 
-            outputs=[prompt_input, neg_input, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, 
-                     sampler_dropdown, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, 
-                     decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, custom_tags_input, tabs])
+        # Restore時にLoRA情報も復元する
+        restore_btn.click(fn=ui_handlers.restore_from_history_by_index, inputs=[selected_index, history_state],
+            outputs=[prompt_input, neg_input, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider,
+                     sampler_dropdown, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val,
+                     decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, custom_tags_input, tabs, 
+                     l1_name, l1_str, l2_name, l2_str])
 
         delete_entry_btn.click(fn=lambda: (gr.update(visible=False), gr.update(visible=True)), outputs=[delete_entry_btn, confirm_delete_row])
         no_delete_btn.click(fn=lambda: (gr.update(visible=True), gr.update(visible=False)), outputs=[delete_entry_btn, confirm_delete_row])
-        
+
         yes_delete_btn.click(fn=ui_handlers.handle_delete_entry, 
             inputs=[selected_index, history_state, page_state, show_favs_state], 
             outputs=[
@@ -412,6 +419,7 @@ def create_ui(config):
         save_btn.click(fn=ui_handlers.handle_save_settings, 
             inputs=[url_in, bat_in, backup_in, real_out_in, workflow_file_in, q_tags_edit, d_tags_edit, t_tags_edit, m_tags_edit, s_tags_edit, c_tags_edit, tags_path_in, res_editor, neg_edit, gr.State(ext_link_name), gr.State(ext_link_url)], 
             outputs=[save_msg])
+        print(h_q_tags)
         
         refresh_btn.click(fn=ui_handlers.check_server_status, inputs=[url_in], outputs=[status_text])
         launch_btn.click(fn=ui_handlers.launch_server, inputs=[bat_in, url_in], outputs=[status_text])
