@@ -76,7 +76,7 @@ def handle_save_settings(url, bat_path, backup_path, real_out_path, workflow_fil
     )
     return "✅ 保存完了。再起動後に反映されます。" if success else "❌ 保存失敗。"
 
-def predict(prompt, neg_prompt, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, l1_name, l1_str, l2_name, l2_str, quality_tags, 
+def predict(prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, quality_tags, 
             y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, custom_tags, current_comfy_url,
             config, workflow_file):
     
@@ -85,8 +85,8 @@ def predict(prompt, neg_prompt, seed, randomize_seed, cfg, steps, width, height,
     neg_prompt = process_underscores(neg_prompt)
 
     output_image, status, saved_entry = generation_manager.generate_and_save(
-        prompt, neg_prompt, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
-        l1_name, l1_str, l2_name, l2_str,
+        prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
+        ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str,
         quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, 
         decade_tags, period_tags, meta_tags, safety_tags, custom_tags, 
         current_comfy_url, workflow_file, config
@@ -118,9 +118,15 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
 
     if not target_list or view_index >= len(target_list): 
         return [
-            -1, "", "", "", "", "", "", "", "", 
-            gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), 
-            gr.update(visible=False), gr.update(visible=False),
+            -1, "", "", "", "", "", "", "", 
+            "", # ckpt_name
+            "", # lora1_name
+            0.0, # lora1_strength
+            gr.update(visible=False),  # Delete
+            gr.update(visible=False), # Confirm
+            gr.update(visible=False), # Restore
+            gr.update(visible=False), # Tag
+            gr.update(visible=False), # Neg
             gr.update(visible=False, value=None),
             gr.update(visible=False) # fav_btn
         ]
@@ -142,6 +148,7 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
     s = ", ".join(item.get("safety_tags", []))
     c = ", ".join(item.get("custom_tags", []))
     
+    ckpt_name = item.get("ckpt_name", "None")
     lora1_name = item.get("lora1_name", "None")
     lora1_strength = item.get("lora1_strength", 0.0)
     original_image_path = history_utils.resolve_image_path(item, config)
@@ -156,33 +163,36 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
         q, d, p, m, s, c, 
         item.get("prompt", ""),
         item.get("neg_prompt", ""),
-        gr.update(visible=True),  # Delete
+        ckpt_name,
         lora1_name,
         lora1_strength,
+        gr.update(visible=True),  # Delete
         gr.update(visible=False), # Confirm
         gr.update(visible=True),  # Restore
         gr.update(visible=True),  # TagAccordion
-        gr.update(visible=True),  # Prompt
         gr.update(visible=True),  # NegPromptAccordion
         gr.update(visible=True, value=original_image_path),
         gr.update(visible=True, value=fav_label, variant=fav_variant) # fav_btn
     ]
 
 def restore_from_history_by_index(idx, history):
-    if idx < 0 or not history or idx >= len(history): return [gr.update()] * 26
+    if idx < 0 or not history or idx >= len(history): return [gr.update()] * 30
     s = history[idx]
     return (
-        s["prompt"], s["neg_prompt"], s["seed"], True, s["cfg"], s["steps"], s["width"], s["height"],
+        s["prompt"], s["neg_prompt"], s.get("trigger_first", False), s["seed"], True, s["cfg"], s["steps"], s["width"], s["height"],
 
         s.get("sampler_name", "euler_ancestral"), s.get("quality_tags", []),
         s.get("y1_en", False), s.get("y1_val", "2026"), s.get("y2_en", False), s.get("y2_val", "2025"),
         s.get("y3_en", False), s.get("y3_val", "2024"),
         s.get("decade_tags", []), s.get("period_tags", []), s.get("meta_tags", []), s.get("safety_tags", []),
         s.get("custom_tags", []), gr.update(selected=0),
+        s.get("ckpt_name", "None"),
         s.get("lora1_name", "None"),
         float(s.get("lora1_strength", 0.0)),
         s.get("lora2_name", "None"),
-        float(s.get("lora2_strength", 0.0))
+        float(s.get("lora2_strength", 0.0)),
+        s.get("lora3_name", "None"),
+        float(s.get("lora3_strength", 0.0))
     )
 def check_url_warning(config):
     current_url = config.get("comfy_url", "")
@@ -228,9 +238,11 @@ def load_history_state_only():
 
 def handle_delete_entry(idx, history, page, show_favs):
     if idx < 0: 
-        return (history, gr.update(), -1, "", "", "", "", "", "", "", "",
+        return (history, gr.update(), -1, 
+                "", "", "", "", "", "", "", "",
+                "", "", 0.0,
                 gr.update(visible=False), gr.update(visible=False), gr.update(visible=False),
-                gr.update(visible=False), gr.update(visible=False), gr.update(visible=False),
+                gr.update(visible=False), gr.update(visible=False),
                 page, gr.update(),
                 gr.update(visible=False, value=None),
                 gr.update(visible=False))
@@ -239,9 +251,11 @@ def handle_delete_entry(idx, history, page, show_favs):
     new_h = history_utils.delete_history_entry(current_config, history, idx)
     
     if not new_h:
-        return (new_h, [], -1, "", "", "", "", "", "", "", "",
+        return (new_h, [], -1, 
+                "", "", "", "", "", "", "", "",
+                "", "", 0.0,
                 gr.update(visible=False), gr.update(visible=False), gr.update(visible=False),
-                gr.update(visible=False), gr.update(visible=False), gr.update(visible=False),
+                gr.update(visible=False), gr.update(visible=False),
                 0, get_page_label(0, [], show_favs),
                 gr.update(visible=False, value=None),
                 gr.update(visible=False))
@@ -267,11 +281,11 @@ def handle_delete_entry(idx, history, page, show_favs):
     return (
         new_h, new_gallery, -1, 
         "", "", "", "", "", "", "", "",
+        "", "", 0.0,
         gr.update(visible=False),  # Delete
         gr.update(visible=False), # Confirm
         gr.update(visible=False),  # Restore
         gr.update(visible=False),  # TagAccordion
-        gr.update(visible=False),  # PromptPreview
         gr.update(visible=False),  # NegPromptAccordion
         page, new_label,          # Page State & Label
         gr.update(visible=False, value=None),

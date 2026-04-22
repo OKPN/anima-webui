@@ -43,6 +43,33 @@ def get_lora_list(config):
     loras.append("wkamura.safetensors")
     return sorted(list(set(loras)))
 
+def get_checkpoint_list(config):
+    """ComfyUIから利用可能なCheckpointのリストを取得する。API経由を試み、失敗した場合はファイルシステムをスキャンする。"""
+    ckpts = ["None"]
+    bat_path = config.get("launch_bat")
+    comfy_url = config.get("comfy_url", "").strip().rstrip("/")
+
+    if comfy_url:
+        try:
+            response = requests.get(f"{comfy_url}/models/checkpoints", timeout=2)
+            response.raise_for_status()
+            ckpts.extend(response.json())
+            print("✅ Checkpoint list fetched from ComfyUI API.")
+        except requests.exceptions.RequestException as e:
+            print(f"⚠️ Could not fetch Checkpoint list from API ({e}), falling back to file scan.")
+            if bat_path:
+                base_dir = os.path.dirname(bat_path)
+                possible_paths = [
+                    os.path.join(base_dir, "models", "checkpoints"),
+                    os.path.join(base_dir, "ComfyUI", "models", "checkpoints"),
+                ]
+                for p in possible_paths:
+                    if os.path.exists(p):
+                        files = glob.glob(os.path.join(p, "**", "*.safetensors"), recursive=True)
+                        ckpts += [os.path.relpath(f, p) for f in files]
+                        break
+    return sorted(list(set(ckpts)))
+
 def update_lora_strength(name, current_str):
     """LoRA選択時に強度を自動調整する"""
     if name == "None":
@@ -59,6 +86,15 @@ def create_ui(config):
     default_res_key = config.get("default_resolution", "1152x896")
     initial_res = RESOLUTION_PRESETS.get(default_res_key, [1152, 896])
     default_w, default_h = initial_res[0], initial_res[1]
+
+    CFG_STEPS_PRESETS = config.get("cfg_steps_presets", {
+        "Standard": [5.0, 30],
+        "Fast (LCM/Turbo)": [2.0, 15],
+        "High Detail": [7.0, 50]
+    })
+    default_cfg_steps_key = config.get("default_cfg_steps", "Standard")
+    initial_cfg_steps = CFG_STEPS_PRESETS.get(default_cfg_steps_key, [5.0, 30])
+    default_cfg, default_steps = initial_cfg_steps[0], initial_cfg_steps[1]
 
     quality_tags_list = config.get("quality_tags_list", [])
     default_quality_tags = config.get("default_quality_tags", [])
@@ -85,6 +121,9 @@ def create_ui(config):
 
     # LoRAリストの取得
     lora_files = get_lora_list(config)
+    
+    # Checkpointリストの取得
+    ckpt_files = get_checkpoint_list(config)
 
     # --- 2. タグデータのロード (オートコンプリート用) ---
     tags_csv_path = config.get("tags_csv_path", "danbooru_tags.csv")
@@ -160,6 +199,7 @@ def create_ui(config):
                                 btn_p_01 = gr.Button("+0.1", size="sm"); btn_p_10 = gr.Button("+1.0", size="sm")
                                 
                             prompt_input = gr.Textbox(label="Positive Prompt", show_label=False, lines=5, elem_id="prompt_input_area")
+                            trigger_first = gr.Checkbox(label="Treat first tag as Trigger Word (Move to absolute front)", value=False)
                         with gr.Accordion("Negative Prompt", open=False):
                             with gr.Group():
                                 with gr.Row(variant="compact"):
@@ -170,11 +210,12 @@ def create_ui(config):
                         generate_button = gr.Button("Generate Image", variant="primary")
                         
                         # DeepL翻訳機能 (ボタン配置)
-                        with gr.Accordion("🇯🇵→🇺🇸 DeepL Prompt Bridge", open=False):
-                            input_ja, output_en = deepl_translator.create_translation_ui()
+                        with gr.Accordion("🇯🇵↔🇺🇸 DeepL Prompt Bridge", open=False):
+                            direction_radio, input_ja, output_en = deepl_translator.create_translation_ui()
                             with gr.Row():
                                 reflect_btn = gr.Button("⬆️ Reflect")
                                 append_btn = gr.Button("➕ Append")
+                                translate_current_btn = gr.Button("⬇️ Translate Current Prompt")
                             deepl_translator.create_api_key_ui()
 
                     with gr.Column(scale=1):
@@ -195,12 +236,22 @@ def create_ui(config):
                                 with gr.Column():
                                     l2_name = gr.Dropdown(label="LoRA 2 Model", choices=lora_files, value="None")
                                     l2_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
+                            with gr.Row():
+                                with gr.Column():
+                                    l3_name = gr.Dropdown(label="LoRA 3 Model", choices=lora_files, value="None")
+                                    l3_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
 
                         with gr.Accordion("Advanced Settings", open=False):
-                            sampler_dropdown = gr.Dropdown(label="Sampler", choices=["er_sde", "euler_ancestral", "res_multistep"], value="euler_ancestral")
-                            res_preset = gr.Dropdown(label="Resolution Preset", choices=list(RESOLUTION_PRESETS.keys()) + ["Custom"], value=default_res_key)
-                            cfg_slider = gr.Slider(label="CFG", minimum=1.0, maximum=20.0, value=5.0, step=0.1)
-                            steps_slider = gr.Slider(label="Steps", minimum=1, maximum=100, value=30, step=1)
+                            with gr.Row():
+                                sampler_dropdown = gr.Dropdown(label="Sampler", choices=["er_sde", "euler_ancestral", "res_multistep"], value="euler_ancestral")
+                                res_preset = gr.Dropdown(label="Resolution Preset", choices=list(RESOLUTION_PRESETS.keys()) + ["Custom"], value=default_res_key)
+                            
+                            with gr.Row():
+                                ckpt_name = gr.Dropdown(label="Checkpoint Model", choices=ckpt_files, value="None")
+                                cfg_steps_preset = gr.Dropdown(label="CFG & Steps Preset", choices=list(CFG_STEPS_PRESETS.keys()) + ["Custom"], value=default_cfg_steps_key)
+                            with gr.Row():
+                                cfg_slider = gr.Slider(label="CFG", minimum=1.0, maximum=20.0, value=default_cfg, step=0.1)
+                                steps_slider = gr.Slider(label="Steps", minimum=1, maximum=100, value=default_steps, step=1)
                             with gr.Row():
                                 width_slider = gr.Slider(label="Width", minimum=512, maximum=2048, value=default_w, step=64); height_slider = gr.Slider(label="Height", minimum=512, maximum=2048, value=default_h, step=64)
                         with gr.Row():
@@ -234,6 +285,7 @@ def create_ui(config):
                 selected_prompt_preview = gr.Textbox(label="Selected Image Prompt", placeholder="Select image...", interactive=False, lines=2, visible=False)
 
                 # HistoryタブにLoRA情報を表示するためのUIを追加
+                h_ckpt_name = gr.Textbox(label="Checkpoint Model", interactive=False)
                 h_lora1_name = gr.Textbox(label="LoRA 1 Model", interactive=False)
                 h_lora1_strength = gr.Number(label="LoRA 1 Strength", interactive=False)
                 
@@ -323,6 +375,17 @@ def create_ui(config):
         
         append_btn.click(fn=ui_handlers.append_prompt, inputs=[prompt_input, output_en], outputs=[prompt_input])
 
+        # プロンプト欄の英語を和訳して表示するイベント
+        translate_current_btn.click(
+            fn=lambda text: (
+                gr.update(value="EN -> EN/JA (英→日)"),
+                gr.update(value=text, label="English Prompt", placeholder="Enter English text here..."),
+                gr.update(value=deepl_translator.translate_prompt(text, "EN -> EN/JA (英→日)"), label="翻訳結果（日本語）")
+            ),
+            inputs=[prompt_input],
+            outputs=[direction_radio, input_ja, output_en]
+        )
+
         # Prompt Emphasis Events (JS only)
         btn_m_01.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(-0.1, "prompt_input_area"))
         btn_m_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(-1.0, "prompt_input_area"))
@@ -338,6 +401,7 @@ def create_ui(config):
         # LoRA Auto-Strength Events
         l1_name.change(fn=update_lora_strength, inputs=[l1_name, l1_str], outputs=l1_str)
         l2_name.change(fn=update_lora_strength, inputs=[l2_name, l2_str], outputs=l2_str)
+        l3_name.change(fn=update_lora_strength, inputs=[l3_name, l3_str], outputs=l3_str)
 
         # Autocomplete Injection (Load時に一度だけ実行)
         demo.load(fn=None, inputs=[], outputs=[], js=ui_javascript.get_autocomplete_js(autocomplete_tags, ["prompt_input_area", "neg_prompt_input_area"]))
@@ -356,11 +420,12 @@ def create_ui(config):
             outputs=[url_in, ip_set_msg]
         )
         res_preset.change(fn=lambda p: RESOLUTION_PRESETS.get(p, [gr.update(), gr.update()]), inputs=[res_preset], outputs=[width_slider, height_slider])
+        cfg_steps_preset.change(fn=lambda p: CFG_STEPS_PRESETS.get(p, [gr.update(), gr.update()]), inputs=[cfg_steps_preset], outputs=[cfg_slider, steps_slider])
         
         predict_params = dict(
             fn=ui_handlers.predict, 
-            inputs=[prompt_input, neg_input, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, history_state, 
-                    l1_name, l1_str, l2_name, l2_str, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, 
+            inputs=[prompt_input, neg_input, trigger_first, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, history_state, ckpt_name, 
+                    l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, 
                     custom_tags_input, url_in, config_state, workflow_file_state], 
             outputs=[image_output, status_output, history_state, history_gallery, page_state, page_label]
         )
@@ -373,11 +438,11 @@ def create_ui(config):
                 selected_index, 
                 h_q_tags, h_d_tags, h_p_tags, h_m_tags, h_s_tags, h_c_tags, 
                 selected_prompt_preview, h_neg_prompt,
+                h_ckpt_name,
                 h_lora1_name, h_lora1_strength,
                 delete_entry_btn, confirm_delete_row,
                 restore_btn,
                 tag_accordion,
-                selected_prompt_preview,
                 neg_accordion,
                 download_original_file,
                 fav_btn
@@ -386,10 +451,10 @@ def create_ui(config):
         
         # Restore時にLoRA情報も復元する
         restore_btn.click(fn=ui_handlers.restore_from_history_by_index, inputs=[selected_index, history_state],
-            outputs=[prompt_input, neg_input, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider,
+            outputs=[prompt_input, neg_input, trigger_first, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider,
                      sampler_dropdown, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val,
                      decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, custom_tags_input, tabs, 
-                     l1_name, l1_str, l2_name, l2_str])
+                     ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str])
 
         delete_entry_btn.click(fn=lambda: (gr.update(visible=False), gr.update(visible=True)), outputs=[delete_entry_btn, confirm_delete_row])
         no_delete_btn.click(fn=lambda: (gr.update(visible=True), gr.update(visible=False)), outputs=[delete_entry_btn, confirm_delete_row])
@@ -400,8 +465,10 @@ def create_ui(config):
                 history_state, history_gallery, selected_index, 
                 h_q_tags, h_d_tags, h_p_tags, h_m_tags, h_s_tags, h_c_tags, 
                 selected_prompt_preview, h_neg_prompt,
+                h_ckpt_name,
+                h_lora1_name, h_lora1_strength,
                 delete_entry_btn, confirm_delete_row, restore_btn, 
-                tag_accordion, selected_prompt_preview, neg_accordion, page_state, page_label,
+                tag_accordion, neg_accordion, page_state, page_label,
                 download_original_file,
                 fav_btn
             ]

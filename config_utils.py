@@ -35,9 +35,20 @@ DEFAULT_CONFIG = {
         "1024x1024": [1024, 1024],
         "1152x896": [1152, 896],
         "896x1152": [896, 1152],
-        "1216x832": [1216, 832]
+        "1216x832": [1216, 832],
+        "832x1216": [832, 1216],
+        "1344x768": [1344, 768],
+        "768x1344": [768, 1344],
+        "512x512": [512, 512]
     },
     "default_resolution": "1152x896",
+    "cfg_steps_presets": {
+        "Standard": [5.0, 30],
+        "Fast (LCM/Turbo)": [2.0, 15],
+        "High Detail": [7.0, 50],
+        "Creative": [8.0, 40]
+    },
+    "default_cfg_steps": "Standard",
     "tags_csv_path": "danbooru_tags.csv",
     "external_link_name": "Catbox.moe",
     "external_link_url": "https://catbox.moe/"
