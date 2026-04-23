@@ -60,7 +60,14 @@ def load_config():
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 user_config = json.load(f)
-                config.update(user_config)
+                # 既存の設定を読み込む際、辞書項目（プリセット類）はマージする
+                for key, value in user_config.items():
+                    if isinstance(value, dict) and key in config and isinstance(config[key], dict):
+                        merged_dict = config[key].copy()
+                        merged_dict.update(value)
+                        config[key] = merged_dict
+                    else:
+                        config[key] = value
         except Exception:
             pass
     return config
@@ -77,7 +84,7 @@ def save_config(config_data):
 def update_and_save_config_v2(
     url, bat_path, backup_path, real_out_path, workflow_file,
     q_list, q_def, d_list, d_def, t_list, t_def, m_list, m_def, s_list, s_def, c_list, c_def, tags_path,
-    res_df, neg_prompt, ext_name, ext_url
+    res_df, cfg_steps_df, neg_prompt, ext_name, ext_url
 ):
     try:
         config = load_config()
@@ -109,6 +116,11 @@ def update_and_save_config_v2(
         for _, row in res_df.iterrows():
             new_res[row["Name"]] = [int(row["Width"]), int(row["Height"])]
         config["resolution_presets"] = new_res
+        
+        new_cfg_steps = {}
+        for _, row in cfg_steps_df.iterrows():
+            new_cfg_steps[row["Name"]] = [float(row["CFG"]), int(row["Steps"])]
+        config["cfg_steps_presets"] = new_cfg_steps
         
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=4, ensure_ascii=False)

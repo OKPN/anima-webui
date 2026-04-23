@@ -34,6 +34,8 @@ if __name__ == "__main__":
 
     demo = create_ui(config)
     
+    # スマホからのアクセス時の通信安定化とタイムアウト防止のためにQueueを有効化
+    demo.queue()
     demo.launch(
         server_name=server_name, 
         server_port=server_port,

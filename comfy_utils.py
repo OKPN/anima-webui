@@ -2,6 +2,7 @@ import json
 import requests
 import time
 import io
+import traceback
 from PIL import Image
 
 def load_workflow(workflow_path):
@@ -23,7 +24,12 @@ def run_comfy_api(workflow, comfy_url):
         r = requests.post(f"{comfy_url}/prompt", json=payload, timeout=10)
         r.raise_for_status()
         prompt_id = r.json()["prompt_id"]
+    except requests.exceptions.HTTPError as e:
+        print(f"\n[ERROR] ComfyUI Prompt API HTTP Error: {e}")
+        print(f"[ERROR] Response Details: {e.response.text}")
+        raise RuntimeError(f"ComfyUI API Error: {e}")
     except Exception as e:
+        traceback.print_exc()
         raise RuntimeError(f"ComfyUIへの接続に失敗しました: {e}")
 
     # 2. 実行完了のポーリング
@@ -64,7 +70,12 @@ def run_comfy_api(workflow, comfy_url):
         img_res.raise_for_status()
         img_obj = Image.open(io.BytesIO(img_res.content)).convert("RGB")
         return img_obj, view_params
+    except requests.exceptions.HTTPError as e:
+        print(f"\n[ERROR] ComfyUI View API HTTP Error: {e}")
+        print(f"[ERROR] Response Details: {e.response.text}")
+        raise RuntimeError(f"画像の取得に失敗しました: {e}")
     except Exception as e:
+        traceback.print_exc()
         raise RuntimeError(f"画像の取得に失敗しました: {e}")
 
 def find_node_by_title(workflow, title):

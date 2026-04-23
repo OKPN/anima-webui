@@ -4,6 +4,7 @@ import system_manager
 import config_utils
 import history_utils
 import pandas as pd
+import traceback
 from urllib.parse import urlparse
 
 def clean_url(url):
@@ -61,7 +62,7 @@ def process_underscores(text):
             processed_tags.append(t.replace("_", " "))
     return ", ".join(processed_tags)
 
-def handle_save_settings(url, bat_path, backup_path, real_out_path, workflow_file, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, c_tags_str, tags_path, res_df, neg_prompt, ext_name, ext_url):
+def handle_save_settings(url, bat_path, backup_path, real_out_path, workflow_file, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, c_tags_str, tags_path, res_df, cfg_steps_df, neg_prompt, ext_name, ext_url):
     q_list, q_def = parse_tagged_str(q_tags_str)
     d_list, d_def = parse_tagged_str(d_tags_str)
     t_list, t_def = parse_tagged_str(t_tags_str)
@@ -72,7 +73,7 @@ def handle_save_settings(url, bat_path, backup_path, real_out_path, workflow_fil
     success = config_utils.update_and_save_config_v2(
         url, bat_path, backup_path, real_out_path, workflow_file,
         q_list, q_def, d_list, d_def, t_list, t_def, m_list, m_def, s_list, s_def, c_list, c_def, tags_path,
-        res_df, neg_prompt, ext_name, ext_url
+        res_df, cfg_steps_df, neg_prompt, ext_name, ext_url
     )
     return "✅ 保存完了。再起動後に反映されます。" if success else "❌ 保存失敗。"
 
@@ -84,18 +85,23 @@ def predict(prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps,
     prompt = process_underscores(prompt)
     neg_prompt = process_underscores(neg_prompt)
 
-    output_image, status, saved_entry = generation_manager.generate_and_save(
-        prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
-        ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str,
-        quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, 
-        decade_tags, period_tags, meta_tags, safety_tags, custom_tags, 
-        current_comfy_url, workflow_file, config
-    )
-    if saved_entry:
-        history.insert(0, saved_entry)
-        # 生成後は1ページ目(index 0)に戻す
-        return output_image, status, history, get_gallery_display_data(history, config, 0), 0, get_page_label(0, history, False)
-    return output_image, status, history, gr.update(), gr.update(), gr.update()
+    try:
+        output_image, status, saved_entry = generation_manager.generate_and_save(
+            prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
+            ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str,
+            quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, 
+            decade_tags, period_tags, meta_tags, safety_tags, custom_tags, 
+            current_comfy_url, workflow_file, config
+        )
+        if saved_entry:
+            history.insert(0, saved_entry)
+            # 生成後は1ページ目(index 0)に戻す
+            return output_image, status, history, get_gallery_display_data(history, config, 0), 0, get_page_label(0, history, False)
+        return output_image, status, history, gr.update(), gr.update(), gr.update()
+    except Exception as e:
+        print("\n[ERROR] Unhandled Exception in predict:")
+        traceback.print_exc()
+        return None, f"❌ System Error: {str(e)}", history, gr.update(), gr.update(), gr.update()
 
 def check_server_status(url):
     target = clean_url(url)

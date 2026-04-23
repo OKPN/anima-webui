@@ -141,6 +141,10 @@ def get_autocomplete_js(all_tags, target_ids):
         // グローバル初期化チェック
         if (window._ac_global_initialized) return;
         window._ac_global_initialized = true;
+        
+        // スマホ等のタッチデバイスではフリック入力・予測変換との競合（Error 400）を防ぐため機能を無効化する
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        if (isMobile) return;
 
         function setupAutocomplete(targetId) {{
             const container = document.querySelector('#' + targetId);

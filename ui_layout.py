@@ -5,6 +5,7 @@ import system_manager
 import config_utils
 import history_utils 
 import ui_javascript
+import comfy_utils
 import pandas as pd
 from urllib.parse import urlparse
 import requests
@@ -44,31 +45,46 @@ def get_lora_list(config):
     return sorted(list(set(loras)))
 
 def get_checkpoint_list(config):
-    """ComfyUIから利用可能なCheckpointのリストを取得する。API経由を試み、失敗した場合はファイルシステムをスキャンする。"""
-    ckpts = ["None"]
+    """ComfyUIから利用可能なCheckpointとUNETのリストを取得する。API経由を試み、失敗した場合はファイルシステムをスキャンする。"""
+    models = ["None"]
     bat_path = config.get("launch_bat")
     comfy_url = config.get("comfy_url", "").strip().rstrip("/")
 
+    api_ok = False
     if comfy_url:
         try:
-            response = requests.get(f"{comfy_url}/models/checkpoints", timeout=2)
-            response.raise_for_status()
-            ckpts.extend(response.json())
-            print("✅ Checkpoint list fetched from ComfyUI API.")
+            res_ckpt = requests.get(f"{comfy_url}/models/checkpoints", timeout=2)
+            if res_ckpt.status_code == 200:
+                models.extend(res_ckpt.json())
+                print("✅ Checkpoint list fetched from ComfyUI API.")
+                api_ok = True
         except requests.exceptions.RequestException as e:
-            print(f"⚠️ Could not fetch Checkpoint list from API ({e}), falling back to file scan.")
-            if bat_path:
-                base_dir = os.path.dirname(bat_path)
-                possible_paths = [
-                    os.path.join(base_dir, "models", "checkpoints"),
-                    os.path.join(base_dir, "ComfyUI", "models", "checkpoints"),
-                ]
-                for p in possible_paths:
-                    if os.path.exists(p):
-                        files = glob.glob(os.path.join(p, "**", "*.safetensors"), recursive=True)
-                        ckpts += [os.path.relpath(f, p) for f in files]
-                        break
-    return sorted(list(set(ckpts)))
+            print(f"⚠️ Could not fetch Checkpoint list from API: {e}")
+            
+        try:
+            res_unet = requests.get(f"{comfy_url}/object_info/UNETLoader", timeout=2)
+            if res_unet.status_code == 200:
+                obj_info = res_unet.json()
+                unet_list = obj_info.get("UNETLoader", {}).get("input", {}).get("required", {}).get("unet_name", [])[0]
+                if isinstance(unet_list, list):
+                    models.extend(unet_list)
+                    print("✅ UNET list fetched from ComfyUI API (/object_info).")
+                    api_ok = True
+        except requests.exceptions.RequestException as e:
+            print(f"⚠️ Could not fetch UNET list from API: {e}")
+
+    if not api_ok and bat_path:
+        print("Falling back to file system scan.")
+        base_dir = os.path.dirname(bat_path)
+        model_types = ["checkpoints", "unet"]
+        for model_type in model_types:
+            for base in [base_dir, os.path.join(base_dir, "ComfyUI")]:
+                model_path = os.path.join(base, "models", model_type)
+                if os.path.exists(model_path):
+                    files = glob.glob(os.path.join(model_path, "**", "*.safetensors"), recursive=True)
+                    models += [os.path.relpath(f, model_path) for f in files]
+                    break
+    return sorted(list(set(models)))
 
 def update_lora_strength(name, current_str):
     """LoRA選択時に強度を自動調整する"""
@@ -115,6 +131,26 @@ def create_ui(config):
     comfy_url = config.get("comfy_url", "")
     workflow_file = config.get("workflow_file")
     year_choices = [str(y) for y in range(2026, 1949, -1)]
+
+    # --- ワークフローからチェックポイントの初期値を取得 ---
+    workflow = comfy_utils.load_workflow(workflow_file)
+    default_ckpt = "None"
+    if workflow:
+        ckpt_node_id = comfy_utils.find_node_by_title(workflow, "Load Checkpoint")
+        if not ckpt_node_id:
+            ckpt_node_id = comfy_utils.find_node_by_title(workflow, "拡散モデルを読み込む")
+        if not ckpt_node_id:
+            for nid, node in workflow.items():
+                class_type = node.get("class_type", "") if isinstance(node, dict) else ""
+                if class_type in ["CheckpointLoaderSimple", "UNETLoader"]:
+                    ckpt_node_id = nid
+                    break
+        if ckpt_node_id:
+            node = workflow[ckpt_node_id]
+            if node.get("class_type") == "UNETLoader":
+                default_ckpt = node.get("inputs", {}).get("unet_name", "None")
+            else:
+                default_ckpt = node.get("inputs", {}).get("ckpt_name", "None")
 
     local_ip = system_manager.get_local_ip()
     detected_url = f"http://{local_ip}:8188"
@@ -247,7 +283,7 @@ def create_ui(config):
                                 res_preset = gr.Dropdown(label="Resolution Preset", choices=list(RESOLUTION_PRESETS.keys()) + ["Custom"], value=default_res_key)
                             
                             with gr.Row():
-                                ckpt_name = gr.Dropdown(label="Checkpoint Model", choices=ckpt_files, value="None")
+                                ckpt_name = gr.Dropdown(label="Checkpoint Model", choices=ckpt_files, value=default_ckpt)
                                 cfg_steps_preset = gr.Dropdown(label="CFG & Steps Preset", choices=list(CFG_STEPS_PRESETS.keys()) + ["Custom"], value=default_cfg_steps_key)
                             with gr.Row():
                                 cfg_slider = gr.Slider(label="CFG", minimum=1.0, maximum=20.0, value=default_cfg, step=0.1)
@@ -361,6 +397,10 @@ def create_ui(config):
                         gr.Markdown("### 📏 Resolution Presets")
                         res_df_data = pd.DataFrame([{"Name": k, "Width": v[0], "Height": v[1]} for k, v in RESOLUTION_PRESETS.items()])
                         res_editor = gr.Dataframe(headers=["Name", "Width", "Height"], datatype=["str", "number", "number"], value=res_df_data, interactive=True)
+                        
+                        gr.Markdown("### 🎛️ CFG & Steps Presets")
+                        cfg_steps_df_data = pd.DataFrame([{"Name": k, "CFG": v[0], "Steps": v[1]} for k, v in CFG_STEPS_PRESETS.items()])
+                        cfg_steps_editor = gr.Dataframe(headers=["Name", "CFG", "Steps"], datatype=["str", "number", "number"], value=cfg_steps_df_data, interactive=True)
                         save_btn = gr.Button("Save All Settings", variant="primary"); save_msg = gr.Markdown("")
                     with gr.Column():
                         gr.Markdown("### 🖥️ Server Management")
@@ -484,7 +524,7 @@ def create_ui(config):
         backup_history_btn.click(fn=lambda: gr.update(value=ui_handlers.backup_history_action(config)), outputs=[history_msg])
 
         save_btn.click(fn=ui_handlers.handle_save_settings, 
-            inputs=[url_in, bat_in, backup_in, real_out_in, workflow_file_in, q_tags_edit, d_tags_edit, t_tags_edit, m_tags_edit, s_tags_edit, c_tags_edit, tags_path_in, res_editor, neg_edit, gr.State(ext_link_name), gr.State(ext_link_url)], 
+            inputs=[url_in, bat_in, backup_in, real_out_in, workflow_file_in, q_tags_edit, d_tags_edit, t_tags_edit, m_tags_edit, s_tags_edit, c_tags_edit, tags_path_in, res_editor, cfg_steps_editor, neg_edit, gr.State(ext_link_name), gr.State(ext_link_url)], 
             outputs=[save_msg])
         print(h_q_tags)
         

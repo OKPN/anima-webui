@@ -3,6 +3,7 @@ import random
 import comfy_utils
 import history_utils
 import datetime # 【追加】現在時刻を取得するために必要
+import traceback
 
 def generate_and_save(
     prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
@@ -205,4 +206,6 @@ def generate_and_save(
         return output_image, "✅ Success", saved_entry
 
     except Exception as e:
+        print("\n[ERROR] Exception in generate_and_save:")
+        traceback.print_exc()
         return None, f"❌ Error: {str(e)}", None
