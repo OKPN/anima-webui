@@ -233,6 +233,8 @@ def create_ui(config):
                                 btn_m_01 = gr.Button("-0.1", size="sm"); btn_m_10 = gr.Button("-1.0", size="sm")
                             with gr.Row(variant="compact"):
                                 btn_p_01 = gr.Button("+0.1", size="sm"); btn_p_10 = gr.Button("+1.0", size="sm")
+                            with gr.Row(variant="compact"):
+                                toggle_btn = gr.Button("👁️ Toggle (選択したプロンプトを一時的に無効化)", size="sm")
                                 
                             prompt_input = gr.Textbox(label="Positive Prompt", show_label=False, lines=5, elem_id="prompt_input_area")
                             trigger_first = gr.Checkbox(label="Treat first tag as Trigger Word (Move to absolute front)", value=False)
@@ -242,6 +244,8 @@ def create_ui(config):
                                     neg_btn_m_01 = gr.Button("-0.1", size="sm"); neg_btn_m_10 = gr.Button("-1.0", size="sm")
                                 with gr.Row(variant="compact"):
                                     neg_btn_p_01 = gr.Button("+0.1", size="sm"); neg_btn_p_10 = gr.Button("+1.0", size="sm")
+                                with gr.Row(variant="compact"):
+                                    neg_toggle_btn = gr.Button("👁️ Toggle (選択したプロンプトを一時的に無効化)", size="sm")
                                 neg_input = gr.Textbox(show_label=False, lines=4, value=default_neg_prompt, elem_id="neg_prompt_input_area")
                         generate_button = gr.Button("Generate Image", variant="primary")
                         
@@ -431,12 +435,14 @@ def create_ui(config):
         btn_m_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(-1.0, "prompt_input_area"))
         btn_p_01.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(0.1, "prompt_input_area"))
         btn_p_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(1.0, "prompt_input_area"))
+        toggle_btn.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_toggle_comment("prompt_input_area"))
 
         # Negative Prompt Emphasis Events
         neg_btn_m_01.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(-0.1, "neg_prompt_input_area"))
         neg_btn_m_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(-1.0, "neg_prompt_input_area"))
         neg_btn_p_01.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(0.1, "neg_prompt_input_area"))
         neg_btn_p_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(1.0, "neg_prompt_input_area"))
+        neg_toggle_btn.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_toggle_comment("neg_prompt_input_area"))
 
         # LoRA Auto-Strength Events
         l1_name.change(fn=update_lora_strength, inputs=[l1_name, l1_str], outputs=l1_str)

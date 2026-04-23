@@ -122,6 +122,44 @@ def get_js_emphasis(delta, elem_id="prompt_input_area"):
     }}
     """
 
+def get_js_toggle_comment(elem_id="prompt_input_area"):
+    """カーソル位置のタグの有効/無効(#の付与)を切り替えるJavaScript"""
+    return f"""
+    () => {{
+        const ta = document.querySelector('#{elem_id} textarea');
+        if (!ta) return;
+        
+        let start = ta.selectionStart;
+        let end = ta.selectionEnd;
+        let txt = ta.value;
+        
+        function replace(s, e, replacement) {{
+            let newFull = txt.substring(0, s) + replacement + txt.substring(e);
+            ta.value = newFull;
+            ta.dispatchEvent(new Event('input', {{ bubbles: true }}));
+            ta.setSelectionRange(s, s + replacement.length);
+            ta.focus();
+        }}
+
+        let s = start;
+        while (s > 0 && txt[s-1] !== ',' && txt[s-1] !== '\\n') s--;
+        let e = end;
+        while (e < txt.length && txt[e] !== ',' && txt[e] !== '\\n') e++;
+        
+        while (s < e && /\\s/.test(txt[s])) s++;
+        while (e > s && /\\s/.test(txt[e-1])) e--;
+
+        if (s < e) {{
+            let content = txt.substring(s, e);
+            if (content.startsWith('#')) {{
+                replace(s, e, content.substring(1));
+            }} else {{
+                replace(s, e, '#' + content);
+            }}
+        }}
+    }}
+    """
+
 def get_autocomplete_js(all_tags, target_ids):
     """
     オートコンプリート機能を有効化するJavaScriptコードを生成する。
