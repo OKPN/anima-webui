@@ -5,7 +5,6 @@ import system_manager
 import config_utils
 import history_utils 
 import ui_javascript
-import comfy_utils
 import pandas as pd
 from urllib.parse import urlparse
 import requests
@@ -45,46 +44,31 @@ def get_lora_list(config):
     return sorted(list(set(loras)))
 
 def get_checkpoint_list(config):
-    """ComfyUIから利用可能なCheckpointとUNETのリストを取得する。API経由を試み、失敗した場合はファイルシステムをスキャンする。"""
-    models = ["None"]
+    """ComfyUIから利用可能なCheckpointのリストを取得する。API経由を試み、失敗した場合はファイルシステムをスキャンする。"""
+    ckpts = ["None"]
     bat_path = config.get("launch_bat")
     comfy_url = config.get("comfy_url", "").strip().rstrip("/")
 
-    api_ok = False
     if comfy_url:
         try:
-            res_ckpt = requests.get(f"{comfy_url}/models/checkpoints", timeout=2)
-            if res_ckpt.status_code == 200:
-                models.extend(res_ckpt.json())
-                print("✅ Checkpoint list fetched from ComfyUI API.")
-                api_ok = True
+            response = requests.get(f"{comfy_url}/models/checkpoints", timeout=2)
+            response.raise_for_status()
+            ckpts.extend(response.json())
+            print("✅ Checkpoint list fetched from ComfyUI API.")
         except requests.exceptions.RequestException as e:
-            print(f"⚠️ Could not fetch Checkpoint list from API: {e}")
-            
-        try:
-            res_unet = requests.get(f"{comfy_url}/object_info/UNETLoader", timeout=2)
-            if res_unet.status_code == 200:
-                obj_info = res_unet.json()
-                unet_list = obj_info.get("UNETLoader", {}).get("input", {}).get("required", {}).get("unet_name", [])[0]
-                if isinstance(unet_list, list):
-                    models.extend(unet_list)
-                    print("✅ UNET list fetched from ComfyUI API (/object_info).")
-                    api_ok = True
-        except requests.exceptions.RequestException as e:
-            print(f"⚠️ Could not fetch UNET list from API: {e}")
-
-    if not api_ok and bat_path:
-        print("Falling back to file system scan.")
-        base_dir = os.path.dirname(bat_path)
-        model_types = ["checkpoints", "unet"]
-        for model_type in model_types:
-            for base in [base_dir, os.path.join(base_dir, "ComfyUI")]:
-                model_path = os.path.join(base, "models", model_type)
-                if os.path.exists(model_path):
-                    files = glob.glob(os.path.join(model_path, "**", "*.safetensors"), recursive=True)
-                    models += [os.path.relpath(f, model_path) for f in files]
-                    break
-    return sorted(list(set(models)))
+            print(f"⚠️ Could not fetch Checkpoint list from API ({e}), falling back to file scan.")
+            if bat_path:
+                base_dir = os.path.dirname(bat_path)
+                possible_paths = [
+                    os.path.join(base_dir, "models", "checkpoints"),
+                    os.path.join(base_dir, "ComfyUI", "models", "checkpoints"),
+                ]
+                for p in possible_paths:
+                    if os.path.exists(p):
+                        files = glob.glob(os.path.join(p, "**", "*.safetensors"), recursive=True)
+                        ckpts += [os.path.relpath(f, p) for f in files]
+                        break
+    return sorted(list(set(ckpts)))
 
 def update_lora_strength(name, current_str):
     """LoRA選択時に強度を自動調整する"""
@@ -132,26 +116,6 @@ def create_ui(config):
     workflow_file = config.get("workflow_file")
     year_choices = [str(y) for y in range(2026, 1949, -1)]
 
-    # --- ワークフローからチェックポイントの初期値を取得 ---
-    workflow = comfy_utils.load_workflow(workflow_file)
-    default_ckpt = "None"
-    if workflow:
-        ckpt_node_id = comfy_utils.find_node_by_title(workflow, "Load Checkpoint")
-        if not ckpt_node_id:
-            ckpt_node_id = comfy_utils.find_node_by_title(workflow, "拡散モデルを読み込む")
-        if not ckpt_node_id:
-            for nid, node in workflow.items():
-                class_type = node.get("class_type", "") if isinstance(node, dict) else ""
-                if class_type in ["CheckpointLoaderSimple", "UNETLoader"]:
-                    ckpt_node_id = nid
-                    break
-        if ckpt_node_id:
-            node = workflow[ckpt_node_id]
-            if node.get("class_type") == "UNETLoader":
-                default_ckpt = node.get("inputs", {}).get("unet_name", "None")
-            else:
-                default_ckpt = node.get("inputs", {}).get("ckpt_name", "None")
-
     local_ip = system_manager.get_local_ip()
     detected_url = f"http://{local_ip}:8188"
 
@@ -190,8 +154,49 @@ def create_ui(config):
     # 上位20000件程度に絞る（ブラウザ負荷軽減のため）
     autocomplete_tags = autocomplete_tags[:20000]
 
+    # --- スマホブラウザの自動翻訳による Error 400 対策 & 切断時の自動復帰 ---
+    custom_head = """
+    <meta name="google" content="notranslate">
+    <script>
+        document.documentElement.lang = 'ja';
+        document.documentElement.setAttribute('translate', 'no');
+        
+        // スマホでバックグラウンドから復帰した際、通信エラー(切断)が起きていれば自動でリロードする
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === 'visible') {
+                // 復帰後に少し待ってからGradioのエラー通知をチェック
+                setTimeout(() => {
+                    const toasts = document.querySelectorAll('.toast-wrap');
+                    toasts.forEach(toast => {
+                        const text = toast.innerText.toLowerCase();
+                        if (text.includes('connection') || text.includes('error') || text.includes('disconnected')) {
+                            window.location.reload();
+                        }
+                    });
+                }, 1500);
+            }
+        });
+    </script>
+    """
+    
+    # --- 追従ボタン用のカスタムCSS ---
+    custom_css = """
+    .sticky-container {
+        position: sticky;
+        top: 10px;
+        z-index: 999;
+        background-color: var(--background-fill-primary);
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color-primary);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    /* Gradioの不要なフッターを非表示にして画面を広く使う */
+    footer { display: none !important; }
+    """
+
     # --- 3. UI定義 ---
-    with gr.Blocks(title=f"{app_name} v{version}") as demo:
+    with gr.Blocks(title=f"{app_name} v{version}", head=custom_head, css=custom_css) as demo:
         gr.Markdown(f"# 🎨 {app_name} <small>v{version}</small>")
         
         # 起動時点の履歴（プレースホルダー）
@@ -233,8 +238,6 @@ def create_ui(config):
                                 btn_m_01 = gr.Button("-0.1", size="sm"); btn_m_10 = gr.Button("-1.0", size="sm")
                             with gr.Row(variant="compact"):
                                 btn_p_01 = gr.Button("+0.1", size="sm"); btn_p_10 = gr.Button("+1.0", size="sm")
-                            with gr.Row(variant="compact"):
-                                toggle_btn = gr.Button("👁️ Toggle (選択したプロンプトを一時的に無効化)", size="sm")
                                 
                             prompt_input = gr.Textbox(label="Positive Prompt", show_label=False, lines=5, elem_id="prompt_input_area")
                             trigger_first = gr.Checkbox(label="Treat first tag as Trigger Word (Move to absolute front)", value=False)
@@ -244,8 +247,6 @@ def create_ui(config):
                                     neg_btn_m_01 = gr.Button("-0.1", size="sm"); neg_btn_m_10 = gr.Button("-1.0", size="sm")
                                 with gr.Row(variant="compact"):
                                     neg_btn_p_01 = gr.Button("+0.1", size="sm"); neg_btn_p_10 = gr.Button("+1.0", size="sm")
-                                with gr.Row(variant="compact"):
-                                    neg_toggle_btn = gr.Button("👁️ Toggle (選択したプロンプトを一時的に無効化)", size="sm")
                                 neg_input = gr.Textbox(show_label=False, lines=4, value=default_neg_prompt, elem_id="neg_prompt_input_area")
                         generate_button = gr.Button("Generate Image", variant="primary")
                         
@@ -287,7 +288,7 @@ def create_ui(config):
                                 res_preset = gr.Dropdown(label="Resolution Preset", choices=list(RESOLUTION_PRESETS.keys()) + ["Custom"], value=default_res_key)
                             
                             with gr.Row():
-                                ckpt_name = gr.Dropdown(label="Checkpoint Model", choices=ckpt_files, value=default_ckpt)
+                                ckpt_name = gr.Dropdown(label="Checkpoint Model", choices=ckpt_files, value="None")
                                 cfg_steps_preset = gr.Dropdown(label="CFG & Steps Preset", choices=list(CFG_STEPS_PRESETS.keys()) + ["Custom"], value=default_cfg_steps_key)
                             with gr.Row():
                                 cfg_slider = gr.Slider(label="CFG", minimum=1.0, maximum=20.0, value=default_cfg, step=0.1)
@@ -299,7 +300,16 @@ def create_ui(config):
                         restart_btn_adv = gr.Button(f"♻️ Restart App", variant="secondary")
                         gr.Markdown(f"### [🔗 {ext_link_name}]({ext_link_url})")
 
-            with gr.Tab("History", id=1) as history_tab:
+            with gr.Tab("Auto Gen", id=1):
+                with gr.Column(elem_classes="sticky-container"):
+                    with gr.Row():
+                        start_auto_btn = gr.Button("▶️ Start Auto Gen", variant="primary")
+                        stop_auto_btn = gr.Button("⏹️ Stop", variant="stop")
+                    auto_status = gr.Markdown("**Status:** Ready")
+                
+                auto_gallery = gr.Gallery(show_label=False, columns=1, height="auto", object_fit="contain")
+
+            with gr.Tab("History", id=2) as history_tab:
                 history_url_warning = gr.Markdown(visible=False)
                 
                 # ページネーション UI
@@ -354,7 +364,7 @@ def create_ui(config):
                 
                 history_msg = gr.Markdown("")
 
-            with gr.Tab("⚙️ System", id=2):
+            with gr.Tab("⚙️ System", id=3):
                 with gr.Row():
                     with gr.Column():
                         gr.Markdown("### 🛠 ComfyUI Server Control")
@@ -405,6 +415,7 @@ def create_ui(config):
                         gr.Markdown("### 🎛️ CFG & Steps Presets")
                         cfg_steps_df_data = pd.DataFrame([{"Name": k, "CFG": v[0], "Steps": v[1]} for k, v in CFG_STEPS_PRESETS.items()])
                         cfg_steps_editor = gr.Dataframe(headers=["Name", "CFG", "Steps"], datatype=["str", "number", "number"], value=cfg_steps_df_data, interactive=True)
+                        
                         save_btn = gr.Button("Save All Settings", variant="primary"); save_msg = gr.Markdown("")
                     with gr.Column():
                         gr.Markdown("### 🖥️ Server Management")
@@ -435,14 +446,12 @@ def create_ui(config):
         btn_m_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(-1.0, "prompt_input_area"))
         btn_p_01.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(0.1, "prompt_input_area"))
         btn_p_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(1.0, "prompt_input_area"))
-        toggle_btn.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_toggle_comment("prompt_input_area"))
 
         # Negative Prompt Emphasis Events
         neg_btn_m_01.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(-0.1, "neg_prompt_input_area"))
         neg_btn_m_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(-1.0, "neg_prompt_input_area"))
         neg_btn_p_01.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(0.1, "neg_prompt_input_area"))
         neg_btn_p_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(1.0, "neg_prompt_input_area"))
-        neg_toggle_btn.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_toggle_comment("neg_prompt_input_area"))
 
         # LoRA Auto-Strength Events
         l1_name.change(fn=update_lora_strength, inputs=[l1_name, l1_str], outputs=l1_str)
@@ -477,6 +486,22 @@ def create_ui(config):
         )
         generate_button.click(**predict_params); generate_button_side.click(**predict_params)
         
+        # 連続生成 (Auto Gen) イベント
+        auto_gen_event = start_auto_btn.click(
+            fn=ui_handlers.continuous_predict,
+            inputs=[prompt_input, neg_input, trigger_first, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, history_state, ckpt_name, 
+                    l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, 
+                    custom_tags_input, url_in, config_state, workflow_file_state],
+            outputs=[auto_gallery, auto_status, history_state]
+        )
+
+        stop_auto_btn.click(
+            fn=lambda: gr.update(value="**Status:** ⏹️ Stopped"),
+            inputs=None,
+            outputs=[auto_status],
+            cancels=[auto_gen_event]  # 無限ループのジェネレーターを強制停止する
+        )
+
         history_gallery.select(
             fn=ui_handlers.on_image_select, 
             inputs=[history_state, page_state, config_state, show_favs_state], 
