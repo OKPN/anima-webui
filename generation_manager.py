@@ -7,9 +7,10 @@ import traceback
 
 def generate_and_save(
     prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
-    ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str,
+    ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str,
+    turbo_lora_en, highres_lora_en,
     quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, 
-    decade_tags, period_tags, meta_tags, safety_tags, custom_tags, 
+    decade_tags, period_tags, meta_tags, safety_tags, artist_tags, custom_tags, 
     current_comfy_url, workflow_file, config
 ):
     """
@@ -48,22 +49,41 @@ def generate_and_save(
     if y2_en: selected_years.append(f"year {y2_val}")
     if y3_en: selected_years.append(f"year {y3_val}")
     
+    if artist_tags and artist_tags.strip():
+        tags = [t.strip() for t in artist_tags.split(",") if t.strip() and not t.strip().startswith("#")]
+        processed_tags = []
+        for t in tags:
+            if not t.startswith("@"):
+                processed_tags.append("@" + t)
+            else:
+                processed_tags.append(t)
+        artist_tags = ", ".join(processed_tags)
+    else:
+        artist_tags = ""
+
     combined_presets = quality_tags + selected_years + decade_tags + period_tags + meta_tags + safety_tags + custom_tags
+    if artist_tags:
+        combined_presets.append(artist_tags)
     prefix = ", ".join(combined_presets) + ", " if combined_presets else ""
     
-    if trigger_first and prompt:
-        prompt_tags = [t.strip() for t in prompt.split(",") if t.strip()]
-        if prompt_tags:
-            trigger_word = prompt_tags[0]
-            remaining_prompt = ", ".join(prompt_tags[1:])
+    # --- #で始まるタグを除外した有効なプロンプトの作成 ---
+    active_prompt_tags = [t.strip() for t in prompt.split(",") if t.strip() and not t.strip().startswith("#")]
+    active_prompt = ", ".join(active_prompt_tags)
+    
+    if trigger_first and active_prompt_tags:
+        if active_prompt_tags:
+            trigger_word = active_prompt_tags[0]
+            remaining_prompt = ", ".join(active_prompt_tags[1:])
             if remaining_prompt:
                 full_positive_prompt = f"{trigger_word}, {prefix}{remaining_prompt}"
             else:
                 full_positive_prompt = f"{trigger_word}, {prefix.rstrip(', ')}"
         else:
-            full_positive_prompt = prefix + prompt
+            full_positive_prompt = prefix.rstrip(', ')
     else:
-        full_positive_prompt = prefix + prompt
+        full_positive_prompt = prefix + active_prompt if active_prompt else prefix.rstrip(', ')
+        
+    active_neg_prompt = ", ".join([t.strip() for t in neg_prompt.split(",") if t.strip() and not t.strip().startswith("#")])
 
     # 4. シード値の決定
     final_seed = random.randint(0, 0xffffffffffffffff) if randomize_seed else int(seed)
@@ -73,7 +93,7 @@ def generate_and_save(
     if pos_node_id:
         workflow[pos_node_id]["inputs"]["text"] = full_positive_prompt
     if neg_node_id:
-        workflow[neg_node_id]["inputs"]["text"] = neg_prompt
+        workflow[neg_node_id]["inputs"]["text"] = active_neg_prompt
     if latent_node_id:
         workflow[latent_node_id]["inputs"]["width"] = int(width)
         workflow[latent_node_id]["inputs"]["height"] = int(height)
@@ -131,42 +151,32 @@ def generate_and_save(
     sorted_loras = list(lora_nodes)
     sorted_loras.sort(key=lambda nid: count_upstream_loras(nid))
         
-    lora1_id = sorted_loras[0] if len(sorted_loras) > 0 else None
-    lora2_id = sorted_loras[1] if len(sorted_loras) > 1 else None
-    lora3_id = sorted_loras[2] if len(sorted_loras) > 2 else None
+    # --- 適用するLoRAのリストを作成 ---
+    active_loras = []
     
-    # LoRA 1 設定
-    if lora1_id:
-        if l1_name and l1_name != "None":
-            workflow[lora1_id]["inputs"]["lora_name"] = l1_name
-            workflow[lora1_id]["inputs"]["strength_model"] = float(l1_str)
-            workflow[lora1_id]["inputs"]["strength_clip"] = float(l1_str)
-        else:
-            # Noneが選択されている場合は強度0で無効化
-            workflow[lora1_id]["inputs"]["strength_model"] = 0.0
-            workflow[lora1_id]["inputs"]["strength_clip"] = 0.0
+    if l1_name and l1_name != "None": active_loras.append((l1_name, float(l1_str)))
+    
+    if turbo_lora_en:
+        active_loras.append((config.get("turbo_lora_path", "anima\\anima-turbo-lora-v0.1.safetensors"), 1.0))
+    if highres_lora_en:
+        active_loras.append((config.get("highres_lora_path", "anima\\anima-highres-aesthetic-boost.safetensors"), 1.0))
+        
+    if l2_name and l2_name != "None": active_loras.append((l2_name, float(l2_str)))
+    if l3_name and l3_name != "None": active_loras.append((l3_name, float(l3_str)))
+    if l4_name and l4_name != "None": active_loras.append((l4_name, float(l4_str)))
+    if l5_name and l5_name != "None": active_loras.append((l5_name, float(l5_str)))
 
-    # LoRA 2 設定
-    if lora2_id:
-        if l2_name and l2_name != "None":
-            workflow[lora2_id]["inputs"]["lora_name"] = l2_name
-            workflow[lora2_id]["inputs"]["strength_model"] = float(l2_str)
-            workflow[lora2_id]["inputs"]["strength_clip"] = float(l2_str)
+    # --- ComfyUIノードへの流し込み ---
+    for i, lora_node_id in enumerate(sorted_loras):
+        if i < len(active_loras):
+            lora_name, lora_strength = active_loras[i]
+            workflow[lora_node_id]["inputs"]["lora_name"] = lora_name
+            workflow[lora_node_id]["inputs"]["strength_model"] = lora_strength
+            workflow[lora_node_id]["inputs"]["strength_clip"] = lora_strength
         else:
-            # Noneが選択されている場合は強度0で無効化
-            workflow[lora2_id]["inputs"]["strength_model"] = 0.0
-            workflow[lora2_id]["inputs"]["strength_clip"] = 0.0
-
-    # LoRA 3 設定
-    if lora3_id:
-        if l3_name and l3_name != "None":
-            workflow[lora3_id]["inputs"]["lora_name"] = l3_name
-            workflow[lora3_id]["inputs"]["strength_model"] = float(l3_str)
-            workflow[lora3_id]["inputs"]["strength_clip"] = float(l3_str)
-        else:
-            # Noneが選択されている場合は強度0で無効化
-            workflow[lora3_id]["inputs"]["strength_model"] = 0.0
-            workflow[lora3_id]["inputs"]["strength_clip"] = 0.0
+            # 使わないノードは強度0で無効化
+            workflow[lora_node_id]["inputs"]["strength_model"] = 0.0
+            workflow[lora_node_id]["inputs"]["strength_clip"] = 0.0
 
     # 【追加】ファイル名（プレフィックス）を現在時刻で上書きする処理
     if save_node_id:
@@ -191,12 +201,15 @@ def generate_and_save(
             "quality_tags": quality_tags, "y1_en": y1_en, "y1_val": y1_val, 
             "y2_en": y2_en, "y2_val": y2_val, "y3_en": y3_en, "y3_val": y3_val,
             "decade_tags": decade_tags, "period_tags": period_tags, "meta_tags": meta_tags, 
-            "safety_tags": safety_tags, "custom_tags": custom_tags,
+            "safety_tags": safety_tags, "artist_tags": artist_tags, "custom_tags": custom_tags,
             "caption": f"Seed: {final_seed} | {sampler_name}",
             "ckpt_name": ckpt_name,
             "lora1_name": l1_name, "lora1_strength": l1_str,
+            "turbo_lora_en": turbo_lora_en, "highres_lora_en": highres_lora_en,
             "lora2_name": l2_name, "lora2_strength": l2_str,
-            "lora3_name": l3_name, "lora3_strength": l3_str
+            "lora3_name": l3_name, "lora3_strength": l3_str,
+            "lora4_name": l4_name, "lora4_strength": l4_str,
+            "lora5_name": l5_name, "lora5_strength": l5_str
         }
 
         # 8. 履歴への追加実行

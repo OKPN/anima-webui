@@ -77,20 +77,32 @@ def handle_save_settings(url, bat_path, backup_path, real_out_path, workflow_fil
     )
     return "✅ 保存完了。再起動後に反映されます。" if success else "❌ 保存失敗。"
 
-def predict(prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, quality_tags, 
-            y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, custom_tags, current_comfy_url,
+def predict(prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, 
+            l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags, 
+            y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, artist_tags, artist_random_en, artist_random_num, artist_tags_list, custom_tags, current_comfy_url,
             config, workflow_file):
     
     # プロンプトのクリーニング処理 (アンダースコアをスペースに変換、scoreタグは除外)
     prompt = process_underscores(prompt)
     neg_prompt = process_underscores(neg_prompt)
+    artist_tags = process_underscores(artist_tags)
+
+    if artist_random_en and artist_tags_list:
+        import random
+        num = int(artist_random_num)
+        sampled_artists = random.sample(artist_tags_list, min(num, len(artist_tags_list)))
+        if artist_tags:
+            artist_tags = artist_tags + ", " + ", ".join(sampled_artists)
+        else:
+            artist_tags = ", ".join(sampled_artists)
 
     try:
         output_image, status, saved_entry = generation_manager.generate_and_save(
             prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
-            ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str,
+            ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str,
+            turbo_lora_en, highres_lora_en,
             quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, 
-            decade_tags, period_tags, meta_tags, safety_tags, custom_tags, 
+            decade_tags, period_tags, meta_tags, safety_tags, artist_tags, custom_tags, 
             current_comfy_url, workflow_file, config
         )
         if saved_entry:
@@ -103,14 +115,16 @@ def predict(prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps,
         traceback.print_exc()
         return None, f"❌ System Error: {str(e)}", history, gr.update(), gr.update(), gr.update()
 
-def continuous_predict(prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, custom_tags, current_comfy_url, config, workflow_file):
+def continuous_predict(prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, 
+            l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, artist_tags, artist_random_en, artist_random_num, artist_tags_list, custom_tags, current_comfy_url, config, workflow_file):
     """連続生成(Auto Gen)用のジェネレーター関数（50件で自動停止）"""
     auto_images = []
     
     for i in range(50):
         # 既存のpredict関数を呼び出して画像を1枚生成
         output_image, status, new_history, _, _, _ = predict(
-            prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, custom_tags, current_comfy_url, config, workflow_file
+            prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, 
+            l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, artist_tags, artist_random_en, artist_random_num, artist_tags_list, custom_tags, current_comfy_url, config, workflow_file
         )
         
         history = new_history
@@ -145,7 +159,7 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
 
     if not target_list or view_index >= len(target_list): 
         return [
-            -1, "", "", "", "", "", "", "", 
+            -1, "", "", "", "", "", "", "", "", 
             "", # ckpt_name
             "", # lora1_name
             0.0, # lora1_strength
@@ -173,6 +187,7 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
     p = ", ".join(item.get("period_tags", []))
     m = ", ".join(item.get("meta_tags", []))
     s = ", ".join(item.get("safety_tags", []))
+    a = item.get("artist_tags", "")
     c = ", ".join(item.get("custom_tags", []))
     
     ckpt_name = item.get("ckpt_name", "None")
@@ -187,7 +202,7 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
     
     return [
         real_index,
-        q, d, p, m, s, c, 
+        q, d, p, m, s, a, c, 
         item.get("prompt", ""),
         item.get("neg_prompt", ""),
         ckpt_name,
@@ -211,7 +226,7 @@ def restore_from_history_by_index(idx, history):
         s.get("sampler_name", "euler_ancestral"), s.get("quality_tags", []),
         s.get("y1_en", False), s.get("y1_val", "2026"), s.get("y2_en", False), s.get("y2_val", "2025"),
         s.get("y3_en", False), s.get("y3_val", "2024"),
-        s.get("decade_tags", []), s.get("period_tags", []), s.get("meta_tags", []), s.get("safety_tags", []),
+        s.get("decade_tags", []), s.get("period_tags", []), s.get("meta_tags", []), s.get("safety_tags", []), s.get("artist_tags", ""),
         s.get("custom_tags", []), gr.update(selected=0),
         s.get("ckpt_name", "None"),
         s.get("lora1_name", "None"),
@@ -219,7 +234,13 @@ def restore_from_history_by_index(idx, history):
         s.get("lora2_name", "None"),
         float(s.get("lora2_strength", 0.0)),
         s.get("lora3_name", "None"),
-        float(s.get("lora3_strength", 0.0))
+        float(s.get("lora3_strength", 0.0)),
+        s.get("turbo_lora_en", False),
+        s.get("highres_lora_en", False),
+        s.get("lora4_name", "None"),
+        float(s.get("lora4_strength", 0.0)),
+        s.get("lora5_name", "None"),
+        float(s.get("lora5_strength", 0.0))
     )
 def check_url_warning(config):
     current_url = config.get("comfy_url", "")
@@ -266,7 +287,7 @@ def load_history_state_only():
 def handle_delete_entry(idx, history, page, show_favs):
     if idx < 0: 
         return (history, gr.update(), -1, 
-                "", "", "", "", "", "", "", "",
+                "", "", "", "", "", "", "", "", "",
                 "", "", 0.0,
                 gr.update(visible=False), gr.update(visible=False), gr.update(visible=False),
                 gr.update(visible=False), gr.update(visible=False),
@@ -279,7 +300,7 @@ def handle_delete_entry(idx, history, page, show_favs):
     
     if not new_h:
         return (new_h, [], -1, 
-                "", "", "", "", "", "", "", "",
+                "", "", "", "", "", "", "", "", "",
                 "", "", 0.0,
                 gr.update(visible=False), gr.update(visible=False), gr.update(visible=False),
                 gr.update(visible=False), gr.update(visible=False),
@@ -307,7 +328,7 @@ def handle_delete_entry(idx, history, page, show_favs):
     
     return (
         new_h, new_gallery, -1, 
-        "", "", "", "", "", "", "", "",
+        "", "", "", "", "", "", "", "", "",
         "", "", 0.0,
         gr.update(visible=False),  # Delete
         gr.update(visible=False), # Confirm

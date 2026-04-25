@@ -128,9 +128,11 @@ def create_ui(config):
     # --- 2. タグデータのロード (オートコンプリート用) ---
     tags_csv_path = config.get("tags_csv_path", "danbooru_tags.csv")
     autocomplete_tags = []
+    artist_autocomplete_tags = []
     
     # デフォルトのサンプルタグ (CSVがない場合用)
     sample_tags = ["1girl", "solo", "long hair", "short hair", "blue eyes", "red eyes", "smile", "looking at viewer", "standing", "sitting", "masterpiece", "best quality"]
+    artist_sample_tags = ["wkamura", "greg rutkowski", "artgerm"]
     
     # 設定されたパスが存在せず、カレントディレクトリに danbooru_tags.csv がある場合はそれを優先利用する
     if not os.path.exists(tags_csv_path) and os.path.exists("danbooru_tags.csv"):
@@ -138,21 +140,22 @@ def create_ui(config):
 
     if os.path.exists(tags_csv_path):
         try:
-            # CSVの1列目をタグ名として読み込む (ヘッダーなし想定、あるいはヘッダー処理を入れる)
-            # ここでは簡易的に pandas で読み込み、nameカラムがあればそれ、なければ1列目を使う
-            df = pd.read_csv(tags_csv_path)
-            if "name" in df.columns:
-                autocomplete_tags = df["name"].dropna().astype(str).tolist()
-            else:
-                autocomplete_tags = df.iloc[:, 0].dropna().astype(str).tolist()
+            # ヘッダーなしCSVとして読み込み、列名を指定する
+            df = pd.read_csv(tags_csv_path, header=None, names=["tag", "category", "count", "aliases"], on_bad_lines='skip', engine='python')
+            autocomplete_tags = df["tag"].dropna().astype(str).tolist()
+            # カテゴリーIDが 1 のものだけを抽出してアーティストタグリストを作成
+            artist_autocomplete_tags = df[df["category"] == 1]["tag"].dropna().astype(str).tolist()
         except Exception as e:
             print(f"⚠️ Failed to load tags.csv: {e}")
             autocomplete_tags = sample_tags
+            artist_autocomplete_tags = artist_sample_tags
     else:
         autocomplete_tags = sample_tags
+        artist_autocomplete_tags = artist_sample_tags
 
     # 上位20000件程度に絞る（ブラウザ負荷軽減のため）
     autocomplete_tags = autocomplete_tags[:20000]
+    artist_autocomplete_tags = artist_autocomplete_tags[:20000]
 
     # --- スマホブラウザの自動翻訳による Error 400 対策 & 切断時の自動復帰 ---
     custom_head = """
@@ -211,6 +214,8 @@ def create_ui(config):
         config_state = gr.State(config)
         workflow_file_state = gr.State(workflow_file)
         
+        # ランダムアーティスト抽出用にCSVから読み込んだリストを保持
+        artist_tags_state = gr.State(artist_autocomplete_tags)
         tabs = gr.Tabs()
 
         with tabs:
@@ -230,23 +235,31 @@ def create_ui(config):
                             period_tags_input = gr.CheckboxGroup(label="Period Tags", choices=time_period_tags_list, value=default_time_period_tags)
                             meta_tags_input = gr.CheckboxGroup(label="Meta Tags", choices=meta_tags_list, value=default_meta_tags)
                             safety_tags_input = gr.CheckboxGroup(label="Safety Tags", choices=safety_tags_list, value=default_safety_tags)
+                            with gr.Row():
+                                artist_tags_input = gr.Textbox(label="Artist Tags", placeholder="e.g. artist name", lines=1, elem_id="artist_tags_input_area", scale=3)
+                                artist_random_en = gr.Checkbox(label="Random Artist", value=False, scale=1, min_width=100, info="CSVからランダム選出")
+                                artist_random_num = gr.Dropdown(choices=["1", "2", "3", "4", "5"], value="1", label="Count", scale=1, min_width=80)
                             custom_tags_input = gr.CheckboxGroup(label="Custom Tags", choices=custom_tags_list, value=default_custom_tags)
                         
                         with gr.Group():
                             gr.Markdown("**Positive Prompt**")
                             with gr.Row(variant="compact"):
-                                btn_m_01 = gr.Button("-0.1", size="sm"); btn_m_10 = gr.Button("-1.0", size="sm")
-                            with gr.Row(variant="compact"):
-                                btn_p_01 = gr.Button("+0.1", size="sm"); btn_p_10 = gr.Button("+1.0", size="sm")
+                                btn_m_10 = gr.Button("-1.0", size="sm", min_width=40)
+                                btn_m_01 = gr.Button("-0.1", size="sm", min_width=40)
+                                btn_p_01 = gr.Button("+0.1", size="sm", min_width=40)
+                                btn_p_10 = gr.Button("+1.0", size="sm", min_width=40)
+                                btn_toggle = gr.Button("ON/OFF", size="sm", min_width=60, variant="secondary")
                                 
                             prompt_input = gr.Textbox(label="Positive Prompt", show_label=False, lines=5, elem_id="prompt_input_area")
                             trigger_first = gr.Checkbox(label="Treat first tag as Trigger Word (Move to absolute front)", value=False)
                         with gr.Accordion("Negative Prompt", open=False):
                             with gr.Group():
                                 with gr.Row(variant="compact"):
-                                    neg_btn_m_01 = gr.Button("-0.1", size="sm"); neg_btn_m_10 = gr.Button("-1.0", size="sm")
-                                with gr.Row(variant="compact"):
-                                    neg_btn_p_01 = gr.Button("+0.1", size="sm"); neg_btn_p_10 = gr.Button("+1.0", size="sm")
+                                    neg_btn_m_10 = gr.Button("-1.0", size="sm", min_width=40)
+                                    neg_btn_m_01 = gr.Button("-0.1", size="sm", min_width=40)
+                                    neg_btn_p_01 = gr.Button("+0.1", size="sm", min_width=40)
+                                    neg_btn_p_10 = gr.Button("+1.0", size="sm", min_width=40)
+                                    neg_btn_toggle = gr.Button("ON/OFF", size="sm", min_width=60, variant="secondary")
                                 neg_input = gr.Textbox(show_label=False, lines=4, value=default_neg_prompt, elem_id="neg_prompt_input_area")
                         generate_button = gr.Button("Generate Image", variant="primary")
                         
@@ -271,16 +284,29 @@ def create_ui(config):
                         with gr.Accordion("LoRA Settings", open=False):
                             with gr.Row():
                                 with gr.Column():
-                                    l1_name = gr.Dropdown(label="LoRA 1 Model", choices=lora_files, value="None")
+                                    l1_name = gr.Dropdown(label="LoRA 1 Model (Main)", choices=lora_files, value="None")
                                     l1_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
                             with gr.Row():
-                                with gr.Column():
-                                    l2_name = gr.Dropdown(label="LoRA 2 Model", choices=lora_files, value="None")
-                                    l2_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
-                            with gr.Row():
-                                with gr.Column():
-                                    l3_name = gr.Dropdown(label="LoRA 3 Model", choices=lora_files, value="None")
-                                    l3_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
+                                turbo_lora_en = gr.Checkbox(label="Turbo LoRA [ON]", value=False, info="強度1.0で自動適用")
+                                highres_lora_en = gr.Checkbox(label="Highres Boost [ON]", value=False, info="強度1.0で自動適用")
+                            
+                            with gr.Accordion("Extra LoRAs", open=False):
+                                with gr.Row():
+                                    with gr.Column():
+                                        l2_name = gr.Dropdown(label="LoRA 2 Model", choices=lora_files, value="None")
+                                        l2_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
+                                with gr.Row():
+                                    with gr.Column():
+                                        l3_name = gr.Dropdown(label="LoRA 3 Model", choices=lora_files, value="None")
+                                        l3_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
+                                with gr.Row():
+                                    with gr.Column():
+                                        l4_name = gr.Dropdown(label="LoRA 4 Model", choices=lora_files, value="None")
+                                        l4_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
+                                with gr.Row():
+                                    with gr.Column():
+                                        l5_name = gr.Dropdown(label="LoRA 5 Model", choices=lora_files, value="None")
+                                        l5_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
 
                         with gr.Accordion("Advanced Settings", open=False):
                             with gr.Row():
@@ -330,6 +356,7 @@ def create_ui(config):
                         h_p_tags = gr.Textbox(label="Period", interactive=False, scale=1)
                         h_m_tags = gr.Textbox(label="Meta", interactive=False, scale=1)
                         h_s_tags = gr.Textbox(label="Safety", interactive=False, scale=1)
+                        h_a_tags = gr.Textbox(label="Artist", interactive=False, scale=1)
                     h_c_tags = gr.Textbox(label="Custom Tags", interactive=False, lines=2)
                 
                 selected_prompt_preview = gr.Textbox(label="Selected Image Prompt", placeholder="Select image...", interactive=False, lines=2, visible=False)
@@ -446,20 +473,24 @@ def create_ui(config):
         btn_m_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(-1.0, "prompt_input_area"))
         btn_p_01.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(0.1, "prompt_input_area"))
         btn_p_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(1.0, "prompt_input_area"))
+        btn_toggle.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_toggle_comment("prompt_input_area"))
 
         # Negative Prompt Emphasis Events
         neg_btn_m_01.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(-0.1, "neg_prompt_input_area"))
         neg_btn_m_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(-1.0, "neg_prompt_input_area"))
         neg_btn_p_01.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(0.1, "neg_prompt_input_area"))
         neg_btn_p_10.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_emphasis(1.0, "neg_prompt_input_area"))
+        neg_btn_toggle.click(fn=None, inputs=[], outputs=[], js=ui_javascript.get_js_toggle_comment("neg_prompt_input_area"))
 
         # LoRA Auto-Strength Events
         l1_name.change(fn=update_lora_strength, inputs=[l1_name, l1_str], outputs=l1_str)
         l2_name.change(fn=update_lora_strength, inputs=[l2_name, l2_str], outputs=l2_str)
         l3_name.change(fn=update_lora_strength, inputs=[l3_name, l3_str], outputs=l3_str)
+        l4_name.change(fn=update_lora_strength, inputs=[l4_name, l4_str], outputs=l4_str)
+        l5_name.change(fn=update_lora_strength, inputs=[l5_name, l5_str], outputs=l5_str)
 
         # Autocomplete Injection (Load時に一度だけ実行)
-        demo.load(fn=None, inputs=[], outputs=[], js=ui_javascript.get_autocomplete_js(autocomplete_tags, ["prompt_input_area", "neg_prompt_input_area"]))
+        demo.load(fn=None, inputs=[], outputs=[], js=ui_javascript.get_autocomplete_js(autocomplete_tags, ["prompt_input_area", "neg_prompt_input_area"], artist_autocomplete_tags, ["artist_tags_input_area"]))
 
         # アプリロード時は「内部データのみ」最新化し、ギャラリー描画(重い処理)は避ける
         demo.load(fn=ui_handlers.load_history_state_only, inputs=None, outputs=[history_state, history_gallery, page_state, page_label])
@@ -480,7 +511,7 @@ def create_ui(config):
         predict_params = dict(
             fn=ui_handlers.predict, 
             inputs=[prompt_input, neg_input, trigger_first, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, history_state, ckpt_name, 
-                    l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, 
+                    l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, artist_tags_input, artist_random_en, artist_random_num, artist_tags_state,
                     custom_tags_input, url_in, config_state, workflow_file_state], 
             outputs=[image_output, status_output, history_state, history_gallery, page_state, page_label]
         )
@@ -490,7 +521,7 @@ def create_ui(config):
         auto_gen_event = start_auto_btn.click(
             fn=ui_handlers.continuous_predict,
             inputs=[prompt_input, neg_input, trigger_first, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, history_state, ckpt_name, 
-                    l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, 
+                    l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, artist_tags_input, artist_random_en, artist_random_num, artist_tags_state,
                     custom_tags_input, url_in, config_state, workflow_file_state],
             outputs=[auto_gallery, auto_status, history_state]
         )
@@ -507,7 +538,7 @@ def create_ui(config):
             inputs=[history_state, page_state, config_state, show_favs_state], 
             outputs=[
                 selected_index, 
-                h_q_tags, h_d_tags, h_p_tags, h_m_tags, h_s_tags, h_c_tags, 
+                h_q_tags, h_d_tags, h_p_tags, h_m_tags, h_s_tags, h_a_tags, h_c_tags, 
                 selected_prompt_preview, h_neg_prompt,
                 h_ckpt_name,
                 h_lora1_name, h_lora1_strength,
@@ -524,8 +555,8 @@ def create_ui(config):
         restore_btn.click(fn=ui_handlers.restore_from_history_by_index, inputs=[selected_index, history_state],
             outputs=[prompt_input, neg_input, trigger_first, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider,
                      sampler_dropdown, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val,
-                     decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, custom_tags_input, tabs, 
-                     ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str])
+                     decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, artist_tags_input, custom_tags_input, tabs, 
+                     ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, turbo_lora_en, highres_lora_en, l4_name, l4_str, l5_name, l5_str])
 
         delete_entry_btn.click(fn=lambda: (gr.update(visible=False), gr.update(visible=True)), outputs=[delete_entry_btn, confirm_delete_row])
         no_delete_btn.click(fn=lambda: (gr.update(visible=True), gr.update(visible=False)), outputs=[delete_entry_btn, confirm_delete_row])
@@ -534,7 +565,7 @@ def create_ui(config):
             inputs=[selected_index, history_state, page_state, show_favs_state], 
             outputs=[
                 history_state, history_gallery, selected_index, 
-                h_q_tags, h_d_tags, h_p_tags, h_m_tags, h_s_tags, h_c_tags, 
+                h_q_tags, h_d_tags, h_p_tags, h_m_tags, h_s_tags, h_a_tags, h_c_tags, 
                 selected_prompt_preview, h_neg_prompt,
                 h_ckpt_name,
                 h_lora1_name, h_lora1_strength,
