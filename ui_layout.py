@@ -10,6 +10,152 @@ from urllib.parse import urlparse
 import requests
 import os
 import glob
+import base64
+import mimetypes
+
+LM_STUDIO_URL = "http://127.0.0.1:1234/v1/chat/completions"
+
+TONE_CONFIG = {
+    "default": {
+        "prompt": "あなたは優秀な「画像生成のプロンプト」アシスタントです。画像とその生成プロンプトが貼られたら、ユーザの「プロンプトのどこを変えると望む絵を生成できるか？」という問いに答え、差し替え後の画像生成プロンプトを掲示してください。",
+        "caption": "落ち着いた女性の声で自然に読み上げてください。",
+        "ref_wav": None
+    },
+    "mesugaki": {
+        "prompt": "あなたは生意気で小悪魔な「メスガキ」で「画像のキュレーター」です。ユーザーを「ざぁこ♡」「よわよわ♡」などと小馬鹿にしつつも、どこか憎めない、実は構ってほしいような態度で、♡や笑などの記号を多用してフレンドリーに話してください。画像を貼られたら猥褻な、性的に露骨な表現を使って画像を解説して、ユーザから解説の指導があった場合はそれに従ってください。",
+        "caption": "メスガキのように、小馬鹿にするような煽り口調で、高めの可愛らしい少女の声で自然に読み上げてください。",
+        "ref_wav": "E:/GenAIs/Irodori-TTS/refs/ref_mesugaki01.wav"
+    },
+    "maid": {
+        "prompt": "あなたは落ち着いたメイドで「画像のキュレーター」です。丁寧で従順な態度で、ご主人様（ユーザー）に仕えるように話してください。画像を貼られたら、丁寧な言葉遣いで解説してください。",
+        "caption": "落ち着いたメイドのように、丁寧で従順な若い女性の声でやわらかく自然に読み上げてください。",
+        "ref_wav": None
+    }
+}
+
+def encode_image_to_base64(filepath):
+    with open(filepath, "rb") as f:
+        return base64.b64encode(f.read()).decode("utf-8")
+
+def chat_and_tts(text, img_path, chatbot_history, api_history, tone, model_name):
+    if not text and not img_path:
+        yield chatbot_history, api_history, gr.update(), gr.update(), ""
+        return
+
+    if img_path:
+        chatbot_history.append({"role": "user", "content": gr.Image(value=img_path, show_label=False)})
+    if text:
+        chatbot_history.append({"role": "user", "content": text})
+
+    api_msg_content = []
+    if text:
+        api_msg_content.append({"type": "text", "text": text})
+    if img_path:
+        b64_img = encode_image_to_base64(img_path)
+        mime_type, _ = mimetypes.guess_type(img_path)
+        if not mime_type:
+            mime_type = "image/jpeg"
+        api_msg_content.append({"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64_img}"}})
+    
+    api_history.append({"role": "user", "content": api_msg_content})
+
+    yield chatbot_history, api_history, None, "", ""
+
+    messages = [{"role": "system", "content": TONE_CONFIG[tone]["prompt"]}] + api_history
+    try:
+        res = requests.post(LM_STUDIO_URL, json={
+            "model": model_name,
+            "messages": messages,
+            "temperature": 0.8,
+            "top_p": 0.95
+        }, timeout=120)
+        res.raise_for_status()
+        reply = res.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        reply = f"【LLM通信エラー】: {e}"
+
+    chatbot_history.append({"role": "assistant", "content": reply})
+    api_history.append({"role": "assistant", "content": reply})
+
+    yield chatbot_history, api_history, gr.update(), gr.update(), reply
+
+def get_js_code(mode):
+    code = """
+    function(text, tone) {
+        if (!text) return text;
+        const mode = 'MODE_PLACEHOLDER';
+        
+        if (window.audioState && window.audioState.currentAudio) {
+            window.audioState.isStopped = true;
+            window.audioState.currentAudio.pause();
+        }
+        if (mode === 'stop') return text;
+
+        window.audioState = { isStopped: false, currentAudio: null };
+        let isLoopMode = (mode === 'loop');
+        
+        const sentences = text.match(/[^。！？\\n]+[。！？\\n]*/g) || [text];
+        const chunks = [];
+        let currentChunk = '';
+        for (const sentence of sentences) {
+            if (currentChunk.length + sentence.length >= 250 && currentChunk.length > 0) {
+                chunks.push(currentChunk.trim());
+                currentChunk = '';
+            }
+            currentChunk += sentence;
+        }
+        if (currentChunk.trim()) chunks.push(currentChunk.trim());
+        if (chunks.length === 0) return text;
+
+        let toneConfig = {
+            "default": { caption: "落ち着いた女性の声で自然に読み上げてください。", ref_wav: null },
+            "mesugaki": { caption: "メスガキのように、小馬鹿にするような煽り口調で、高めの可愛らしい少女の声で自然に読み上げてください。", ref_wav: "E:/GenAIs/Irodori-TTS/refs/ref_mesugaki01.wav" },
+            "maid": { caption: "落ち着いたメイドのように、丁寧で従順な若い女性の声でやわらかく自然に読み上げてください。", ref_wav: null }
+        };
+        
+        let fetchAudio = async (chunkText) => {
+            let payload = { text: chunkText, caption: toneConfig[tone].caption };
+            if (toneConfig[tone].ref_wav) payload.ref_wav = toneConfig[tone].ref_wav;
+            try {
+                let res = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!res.ok) return null;
+                let blob = await res.blob();
+                return URL.createObjectURL(blob);
+            } catch (e) { console.error(e); return null; }
+        };
+        
+        if (!window.cachedAudioUrls) window.cachedAudioUrls = {};
+        const cacheKey = text + tone;
+        if (!window.cachedAudioUrls[cacheKey]) window.cachedAudioUrls[cacheKey] = [];
+        let cachedUrls = window.cachedAudioUrls[cacheKey];
+        
+        let playLoop = async () => {
+            while (!window.audioState.isStopped) {
+                let nextAudioPromise = null;
+                if (!cachedUrls[0]) nextAudioPromise = fetchAudio(chunks[0]);
+                
+                for (let i = 0; i < chunks.length; i++) {
+                    if (window.audioState.isStopped) break;
+                    let url = cachedUrls[i];
+                    if (!url) { url = await (nextAudioPromise || fetchAudio(chunks[i])); if (url) cachedUrls[i] = url; }
+                    if (i + 1 < chunks.length && !cachedUrls[i + 1]) { nextAudioPromise = fetchAudio(chunks[i + 1]); } else { nextAudioPromise = null; }
+                    
+                    if (url && !window.audioState.isStopped) {
+                        let audio = new Audio(url);
+                        window.audioState.currentAudio = audio;
+                        await new Promise(r => { audio.onended = r; audio.onerror = r; audio.play().catch(r); });
+                        window.audioState.currentAudio = null;
+                    }
+                }
+                if (!isLoopMode) break;
+                if (!window.audioState.isStopped) await new Promise(res => setTimeout(res, 800));
+            }
+        };
+        playLoop();
+        return text;
+    }
+    """
+    return code.replace("MODE_PLACEHOLDER", mode)
 
 def get_lora_list(config):
     """ComfyUIから利用可能なLoRAのリストを取得する。API経由を試み、失敗した場合はファイルシステムをスキャンする。"""
@@ -199,7 +345,7 @@ def create_ui(config):
     """
 
     # --- 3. UI定義 ---
-    with gr.Blocks(title=f"{app_name} v{version}", head=custom_head, css=custom_css) as demo:
+    with gr.Blocks(title=f"{app_name} v{version}", head=custom_head, css=custom_css, theme=gr.themes.Default(primary_hue="blue")) as demo:
         gr.Markdown(f"# 🎨 {app_name} <small>v{version}</small>")
         
         # 起動時点の履歴（プレースホルダー）
@@ -359,7 +505,8 @@ def create_ui(config):
                         h_a_tags = gr.Textbox(label="Artist", interactive=False, scale=1)
                     h_c_tags = gr.Textbox(label="Custom Tags", interactive=False, lines=2)
                 
-                selected_prompt_preview = gr.Textbox(label="Selected Image Prompt", placeholder="Select image...", interactive=False, lines=2, visible=False)
+                with gr.Accordion("Applied Positive Prompt", open=False, visible=False) as pos_accordion:
+                    selected_prompt_preview = gr.Textbox(show_label=False, interactive=False, lines=3)
 
                 # HistoryタブにLoRA情報を表示するためのUIを追加
                 h_ckpt_name = gr.Textbox(label="Checkpoint Model", interactive=False)
@@ -374,6 +521,7 @@ def create_ui(config):
                 with gr.Row():
                     fav_btn = gr.Button("🤍 Like", visible=False, scale=1)
                     restore_btn = gr.Button("♻️ Restore & Go", variant="primary", scale=2, visible=False)
+                    send_to_chat_btn = gr.Button("💬 Send to AI Chat", variant="secondary", scale=2, visible=False)
                     delete_entry_btn = gr.Button("🗑️ Delete", variant="stop", visible=False, scale=1)
                     with gr.Row(visible=False) as confirm_delete_row:
                         gr.Markdown("⚠️ **Delete?**")
@@ -449,6 +597,36 @@ def create_ui(config):
                         status_text = gr.Textbox(label="Connection Status", value="Checking...", interactive=False)
                         refresh_btn = gr.Button("🔄 Status"); launch_btn = gr.Button("🚀 Launch ComfyUI", variant="primary")
                         restart_btn = gr.Button(f"♻️ Restart App", variant="secondary")
+
+            with gr.Tab("💬 AI Chat", id=4):
+                with gr.Row():
+                    chat_clear_btn = gr.Button("会話履歴をクリア")
+                    chat_model_input = gr.Textbox(label="LM Studio モデル名", value="openai/gemma-4-26b-a4b-it-heretic-ara-v2-i1", scale=3)
+
+                chat_chatbot = gr.Chatbot(height=500, label="チャット履歴")
+                
+                gr.Markdown("### 🔊 音声再生コントロール (最新のメッセージ)")
+                with gr.Row():
+                    chat_play_btn = gr.Button("▶️ 再生")
+                    chat_loop_btn = gr.Button("🔄 ループ再生")
+                    chat_stop_btn = gr.Button("⏹️ 停止")
+
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        chat_img_input = gr.Image(type="filepath", label="📷 画像を添付", height=85)
+                    with gr.Column(scale=8):
+                        chat_msg_input = gr.Textbox(show_label=False, placeholder="メッセージを入力... (Enterで送信)", lines=2)
+                
+                with gr.Row():
+                    chat_tone_dropdown = gr.Dropdown(
+                        choices=[("標準", "default"), ("メスガキ風", "mesugaki"), ("メイド風", "maid")],
+                        value="default",
+                        label="口調（Tone）の設定"
+                    )
+                    chat_send_btn = gr.Button("送信", variant="primary")
+
+                chat_api_history = gr.State([])
+                chat_latest_ai_msg = gr.Textbox(visible=False)
 
         # --- 4. イベント定義 ---
         
@@ -544,8 +722,10 @@ def create_ui(config):
                 h_lora1_name, h_lora1_strength,
                 delete_entry_btn, confirm_delete_row,
                 restore_btn,
+                send_to_chat_btn,
                 tag_accordion,
                 neg_accordion,
+                pos_accordion,
                 download_original_file,
                 fav_btn
             ]
@@ -569,13 +749,20 @@ def create_ui(config):
                 selected_prompt_preview, h_neg_prompt,
                 h_ckpt_name,
                 h_lora1_name, h_lora1_strength,
-                delete_entry_btn, confirm_delete_row, restore_btn, 
-                tag_accordion, neg_accordion, page_state, page_label,
+                delete_entry_btn, confirm_delete_row, restore_btn, send_to_chat_btn,
+                tag_accordion, neg_accordion, pos_accordion, page_state, page_label,
                 download_original_file,
                 fav_btn
             ]
         )
         
+        # AIチャットへ送るイベント
+        send_to_chat_btn.click(
+            fn=ui_handlers.send_to_chat_action,
+            inputs=[selected_index, history_state, config_state],
+            outputs=[chat_img_input, chat_msg_input, tabs]
+        )
+
         clear_history_btn.click(fn=lambda: (gr.update(visible=False), gr.update(visible=True), gr.update(visible=True)), 
                                 outputs=[clear_history_btn, clear_history_notice, confirm_clear_row])
         no_clear_btn.click(fn=lambda: (gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)), 
@@ -625,4 +812,16 @@ def create_ui(config):
         # 【追加】GenerateタブのRestart Appボタンにもイベントを紐付け
         restart_btn_adv.click(fn=lambda: ui_handlers.restart_app(app_name), js=restart_js)
         
+        # 【追加】AI Chat タブのイベント紐付け
+        chat_inputs = [chat_msg_input, chat_img_input, chat_chatbot, chat_api_history, chat_tone_dropdown, chat_model_input]
+        chat_outputs = [chat_chatbot, chat_api_history, chat_img_input, chat_msg_input, chat_latest_ai_msg]
+
+        chat_send_btn.click(chat_and_tts, inputs=chat_inputs, outputs=chat_outputs)
+        chat_msg_input.submit(chat_and_tts, inputs=chat_inputs, outputs=chat_outputs)
+        chat_clear_btn.click(lambda: ([], [], None, "", ""), inputs=None, outputs=[chat_chatbot, chat_api_history, chat_img_input, chat_msg_input, chat_latest_ai_msg])
+
+        chat_play_btn.click(fn=None, inputs=[chat_latest_ai_msg, chat_tone_dropdown], outputs=[chat_latest_ai_msg], js=get_js_code('normal'))
+        chat_loop_btn.click(fn=None, inputs=[chat_latest_ai_msg, chat_tone_dropdown], outputs=[chat_latest_ai_msg], js=get_js_code('loop'))
+        chat_stop_btn.click(fn=None, inputs=[chat_latest_ai_msg, chat_tone_dropdown], outputs=[chat_latest_ai_msg], js=get_js_code('stop'))
+
     return demo

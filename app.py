@@ -2,6 +2,24 @@ import gradio as gr
 from ui_layout import create_ui
 import config_utils
 import os
+from fastapi import FastAPI, Request
+from fastapi.responses import Response
+import requests
+import uvicorn
+import json
+
+app = FastAPI()
+TTS_API_URL = "http://127.0.0.1:8000/generate-voice"
+
+@app.post("/api/tts")
+async def tts_proxy(request: Request):
+    try:
+        data = await request.json()
+        res = requests.post(TTS_API_URL, json=data, timeout=120)
+        res.raise_for_status()
+        return Response(content=res.content, media_type="audio/wav")
+    except Exception as e:
+        return Response(content=json.dumps({"error": str(e)}), status_code=500, media_type="application/json")
 
 if __name__ == "__main__":
     config = config_utils.load_config()
@@ -32,14 +50,14 @@ if __name__ == "__main__":
     print(f"Web UI URL     : http://localhost:{server_port}")
     print("------------------------------------------")
 
+    # Gradioが外部からの画像読み込みを許可するパスを設定
+    if allowed_paths:
+        os.environ["GRADIO_ALLOWED_PATHS"] = ",".join(allowed_paths)
+
     demo = create_ui(config)
     
     # スマホからのアクセス時の通信安定化とタイムアウト防止のためにQueueを有効化
     demo.queue()
-    demo.launch(
-        server_name=server_name, 
-        server_port=server_port,
-        show_error=True,
-        allowed_paths=allowed_paths,
-        theme=gr.themes.Default(primary_hue="blue")
-    )
+    
+    gradio_app = gr.mount_gradio_app(app, demo, path="/")
+    uvicorn.run(gradio_app, host=server_name, port=server_port)

@@ -149,6 +149,53 @@ def launch_server(bat, url):
     if not bat: return "❌ Path is empty."
     return system_manager.launch_comfy(bat, clean_url(url)) or "🚀 Process Started"
 
+def send_to_chat_action(idx, history, config):
+    if idx < 0 or not history or idx >= len(history):
+        return gr.update(), gr.update(), gr.update()
+        
+    item = history[idx]
+    img_path = history_utils.resolve_image_path(item, config)
+    
+    parts = []
+    
+    q = ", ".join(item.get("quality_tags", []))
+    if q: parts.append(q)
+    d = ", ".join(item.get("decade_tags", []))
+    if d: parts.append(d)
+    p = ", ".join(item.get("period_tags", []))
+    if p: parts.append(p)
+    m = ", ".join(item.get("meta_tags", []))
+    if m: parts.append(m)
+    s = ", ".join(item.get("safety_tags", []))
+    if s: parts.append(s)
+    a = item.get("artist_tags", "")
+    if a: parts.append(a)
+    c = ", ".join(item.get("custom_tags", []))
+    if c: parts.append(c)
+    
+    prompt = item.get("prompt", "")
+    trigger_first = item.get("trigger_first", False)
+    
+    trigger_word = ""
+    remaining_prompt = prompt
+    
+    if trigger_first and prompt:
+        prompt_tags = [t.strip() for t in prompt.split(",") if t.strip() and not t.strip().startswith("#")]
+        if prompt_tags:
+            trigger_word = prompt_tags[0]
+            remaining_prompt = ", ".join(prompt_tags[1:])
+            
+    if remaining_prompt: 
+        parts.append(remaining_prompt)
+    
+    full_prompt = ", ".join(filter(None, parts))
+    
+    if trigger_word:
+        full_prompt = f"{trigger_word}, {full_prompt}" if full_prompt else trigger_word
+
+    msg_text = full_prompt
+    return img_path, msg_text, gr.update(selected=4)
+
 def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
     # ページネーションを考慮したインデックス計算
     view_index = (page * GALLERY_PER_PAGE) + evt.index
@@ -166,8 +213,10 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
             gr.update(visible=False),  # Delete
             gr.update(visible=False), # Confirm
             gr.update(visible=False), # Restore
+            gr.update(visible=False), # Send to Chat
             gr.update(visible=False), # Tag
             gr.update(visible=False), # Neg
+            gr.update(visible=False), # Pos
             gr.update(visible=False, value=None),
             gr.update(visible=False) # fav_btn
         ]
@@ -211,8 +260,10 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
         gr.update(visible=True),  # Delete
         gr.update(visible=False), # Confirm
         gr.update(visible=True),  # Restore
+        gr.update(visible=True),  # Send to Chat
         gr.update(visible=True),  # TagAccordion
         gr.update(visible=True),  # NegPromptAccordion
+        gr.update(visible=True),  # PosAccordion
         gr.update(visible=True, value=original_image_path),
         gr.update(visible=True, value=fav_label, variant=fav_variant) # fav_btn
     ]
@@ -290,8 +341,9 @@ def handle_delete_entry(idx, history, page, show_favs):
                 "", "", "", "", "", "", "", "", "",
                 "", "", 0.0,
                 gr.update(visible=False), gr.update(visible=False), gr.update(visible=False),
+                gr.update(visible=False), # send_to_chat
                 gr.update(visible=False), gr.update(visible=False),
-                page, gr.update(),
+                gr.update(visible=False), page, gr.update(),
                 gr.update(visible=False, value=None),
                 gr.update(visible=False))
     
@@ -303,8 +355,9 @@ def handle_delete_entry(idx, history, page, show_favs):
                 "", "", "", "", "", "", "", "", "",
                 "", "", 0.0,
                 gr.update(visible=False), gr.update(visible=False), gr.update(visible=False),
+                gr.update(visible=False), # send_to_chat
                 gr.update(visible=False), gr.update(visible=False),
-                0, get_page_label(0, [], show_favs),
+                gr.update(visible=False), 0, get_page_label(0, [], show_favs),
                 gr.update(visible=False, value=None),
                 gr.update(visible=False))
     
@@ -333,8 +386,10 @@ def handle_delete_entry(idx, history, page, show_favs):
         gr.update(visible=False),  # Delete
         gr.update(visible=False), # Confirm
         gr.update(visible=False),  # Restore
+        gr.update(visible=False),  # Send to Chat
         gr.update(visible=False),  # TagAccordion
         gr.update(visible=False),  # NegPromptAccordion
+        gr.update(visible=False),  # PosAccordion
         page, new_label,          # Page State & Label
         gr.update(visible=False, value=None),
         gr.update(visible=False)
