@@ -301,6 +301,9 @@ def create_ui(config):
     
     # ワークフローからデフォルトのチェックポイント名（重みの名前）を取得
     default_ckpt = "None"
+    default_loras = [{"name": "None", "str": 0.0} for _ in range(5)]
+    default_lllite = {"en": False, "model": "None", "str": 1.0, "start": 0.0, "end": 1.0, "auto_res": True}
+
     if workflow_file and os.path.exists(workflow_file):
         workflow = comfy_utils.load_workflow(workflow_file)
         if workflow:
@@ -317,6 +320,73 @@ def create_ui(config):
                 if default_ckpt != "None" and default_ckpt not in ckpt_files:
                     ckpt_files.append(default_ckpt)
                     ckpt_files.sort()
+
+            # --- LoRAの初期値取得 ---
+            lora_nodes = set()
+            for nid, node in workflow.items():
+                if not isinstance(node, dict): continue
+                class_type = node.get("class_type", "")
+                title = node.get("_meta", {}).get("title", "")
+                if "LoraLoader" in class_type or "LoRA" in title:
+                    lora_nodes.add(nid)
+            
+            def count_upstream_loras(nid, visited=None):
+                if visited is None:
+                    visited = set()
+                if nid in visited:
+                    return 0
+                visited.add(nid)
+                node = workflow.get(str(nid), {})
+                inputs = node.get("inputs", {})
+                max_count = 0
+                for key, value in inputs.items():
+                    if isinstance(value, list) and len(value) >= 1:
+                        source_id = str(value[0])
+                        count = count_upstream_loras(source_id, visited)
+                        if source_id in lora_nodes:
+                            count += 1
+                        if count > max_count:
+                            max_count = count
+                return max_count
+
+            sorted_loras = list(lora_nodes)
+            sorted_loras.sort(key=lambda nid: count_upstream_loras(nid))
+            
+            for i, nid in enumerate(sorted_loras):
+                if i >= 5: break
+                inputs = workflow[nid].get("inputs", {})
+                l_name = inputs.get("lora_name", "None")
+                l_str = float(inputs.get("strength_model", 0.0))
+                default_loras[i] = {"name": l_name, "str": l_str}
+                if l_name != "None" and l_name not in lora_files:
+                    lora_files.append(l_name)
+            lora_files.sort()
+
+            # --- LLLiteの初期値取得 ---
+            lllite_node_id = comfy_utils.find_node_by_title(workflow, "LLLite")
+            if not lllite_node_id:
+                for nid, node in workflow.items():
+                    class_type = node.get("class_type", "") if isinstance(node, dict) else ""
+                    if "LLLite" in class_type or "lllite" in class_type.lower():
+                        lllite_node_id = nid
+                        break
+            if lllite_node_id:
+                inputs = workflow[lllite_node_id].get("inputs", {})
+                l_model = inputs.get("model_name", "None")
+                l_str = float(inputs.get("strength", 1.0))
+                l_start = float(inputs.get("start_percent", 0.0))
+                l_end = float(inputs.get("end_percent", 1.0))
+                
+                default_lllite["model"] = l_model
+                default_lllite["str"] = l_str
+                default_lllite["start"] = l_start
+                default_lllite["end"] = l_end
+                # 設定強度が0.0より大きければ有効(Enable)とする
+                default_lllite["en"] = True if (l_str > 0.0 and l_model != "None") else False
+                
+                if l_model != "None" and l_model not in lllite_files:
+                    lllite_files.append(l_model)
+            lllite_files.sort()
 
     # --- 2. タグデータのロード (オートコンプリート用) ---
     tags_csv_path = config.get("tags_csv_path", "danbooru_tags.csv")
@@ -507,7 +577,9 @@ def create_ui(config):
                             with gr.Row():
                                 lllite_en = gr.Checkbox(label="Enable LLLite", value=False, scale=1)
                                 lllite_model = gr.Dropdown(label="LLLite Model", choices=lllite_files, value="None", allow_custom_value=True, scale=3)
-                            lllite_img = gr.Image(type="filepath", label="Reference Image (Upload)", height=150)
+                            with gr.Row():
+                                lllite_img = gr.Image(type="filepath", label="Reference Image (Upload)", height=150, scale=3)
+                                lllite_auto_res = gr.Checkbox(label="Auto Adjust Resolution", value=default_lllite["auto_res"], info="参照画像の縦横比に合わせて出力を自動調整します", scale=1)
                             with gr.Row():
                                 lllite_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=1.0)
                                 lllite_start = gr.Slider(label="Start Percent", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
@@ -750,7 +822,7 @@ def create_ui(config):
             inputs=[prompt_input, neg_input, trigger_first, enable_negpip, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, history_state, ckpt_name, 
                     l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, artist_tags_input, artist_random_en, artist_random_num, artist_tags_state,
                     custom_tags_input, url_in, config_state, workflow_file_state,
-                    lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end], 
+                    lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end, lllite_auto_res], 
             outputs=[image_output, status_output, history_state, history_gallery, page_state, page_label]
         )
         generate_button.click(**predict_params); generate_button_side.click(**predict_params)
@@ -761,7 +833,7 @@ def create_ui(config):
             inputs=[prompt_input, neg_input, trigger_first, enable_negpip, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, history_state, ckpt_name, 
                     l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, artist_tags_input, artist_random_en, artist_random_num, artist_tags_state,
                     custom_tags_input, url_in, config_state, workflow_file_state,
-                    lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end],
+                    lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end, lllite_auto_res],
             outputs=[auto_gallery, auto_status, history_state]
         )
 
@@ -799,7 +871,7 @@ def create_ui(config):
                      sampler_dropdown, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val,
                      decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, artist_tags_input, custom_tags_input, tabs, 
                      ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, turbo_lora_en, highres_lora_en, l4_name, l4_str, l5_name, l5_str,
-                     lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end])
+                     lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end, lllite_auto_res])
 
         delete_entry_btn.click(fn=lambda: (gr.update(visible=False), gr.update(visible=True)), outputs=[delete_entry_btn, confirm_delete_row])
         no_delete_btn.click(fn=lambda: (gr.update(visible=True), gr.update(visible=False)), outputs=[delete_entry_btn, confirm_delete_row])

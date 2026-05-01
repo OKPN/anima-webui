@@ -4,6 +4,7 @@ import comfy_utils
 import history_utils
 import datetime # 【追加】現在時刻を取得するために必要
 import traceback
+import math
 
 def generate_and_save(
     prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
@@ -12,7 +13,7 @@ def generate_and_save(
     quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, 
     decade_tags, period_tags, meta_tags, safety_tags, artist_tags, custom_tags, 
     current_comfy_url, workflow_file, config,
-    lllite_en=False, lllite_model="None", lllite_img=None, lllite_str=1.0, lllite_start=0.0, lllite_end=1.0
+    lllite_en=False, lllite_model="None", lllite_img=None, lllite_str=1.0, lllite_start=0.0, lllite_end=1.0, lllite_auto_res=True
 ):
     """
     ワークフローの初期タイトル値を使用して、IDを動的に特定する生成マネージャー。
@@ -157,6 +158,28 @@ def generate_and_save(
     # 4. シード値の決定
     final_seed = random.randint(0, 0xffffffffffffffff) if randomize_seed else int(seed)
 
+    # --- 【追加】参照画像の縦横比に合わせて出力解像度を自動調整 ---
+    # 現在UIで設定されている Width x Height の総ピクセル数を「モデルの出力能力」として維持しつつ、
+    # 参照画像のアスペクト比に合わせて新しい Width と Height を計算します。
+    if lllite_node_id and lllite_en and lllite_img and lllite_auto_res:
+        try:
+            from PIL import Image
+            with Image.open(lllite_img) as ref_img:
+                img_w, img_h = ref_img.size
+            
+            if img_w > 0 and img_h > 0:
+                target_area = int(width) * int(height)
+                aspect_ratio = img_w / img_h
+                
+                new_h = math.sqrt(target_area / aspect_ratio)
+                new_w = new_h * aspect_ratio
+                
+                # 安定拡散モデル等で一般的な「64の倍数」に丸める
+                width = max(64, int(round(new_w / 64) * 64))
+                height = max(64, int(round(new_h / 64) * 64))
+        except Exception as e:
+            print(f"⚠️ Failed to auto-adjust resolution based on reference image: {e}")
+
     # --- 5. パラメータの動的注入 ---
     # ノードが特定できた場合のみ値を書き換える (堅牢な設計)
     if pos_node_id:
@@ -280,7 +303,7 @@ def generate_and_save(
             "lora4_name": l4_name, "lora4_strength": l4_str,
             "lora5_name": l5_name, "lora5_strength": l5_str,
             "lllite_en": lllite_en, "lllite_model": lllite_model, "lllite_img": lllite_img, 
-            "lllite_str": lllite_str, "lllite_start": lllite_start, "lllite_end": lllite_end
+            "lllite_str": lllite_str, "lllite_start": lllite_start, "lllite_end": lllite_end, "lllite_auto_res": lllite_auto_res
         }
 
         # 8. 履歴への追加実行

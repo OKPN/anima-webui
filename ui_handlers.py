@@ -80,7 +80,7 @@ def handle_save_settings(url, bat_path, backup_path, real_out_path, workflow_fil
 def predict(prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, 
             l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags, 
             y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, artist_tags, artist_random_en, artist_random_num, artist_tags_list, custom_tags, current_comfy_url, config, workflow_file,
-            lllite_en=False, lllite_model="None", lllite_img=None, lllite_str=1.0, lllite_start=0.0, lllite_end=1.0):
+            lllite_en=False, lllite_model="None", lllite_img=None, lllite_str=1.0, lllite_start=0.0, lllite_end=1.0, lllite_auto_res=True):
     
     # プロンプトのクリーニング処理 (アンダースコアをスペースに変換、scoreタグは除外)
     prompt = process_underscores(prompt)
@@ -104,7 +104,7 @@ def predict(prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_se
             quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, 
             decade_tags, period_tags, meta_tags, safety_tags, artist_tags, custom_tags, 
             current_comfy_url, workflow_file, config,
-            lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end
+            lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end, lllite_auto_res
         )
         if saved_entry:
             history.insert(0, saved_entry)
@@ -118,7 +118,7 @@ def predict(prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_se
 
 def continuous_predict(prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, 
             l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, artist_tags, artist_random_en, artist_random_num, artist_tags_list, custom_tags, current_comfy_url, config, workflow_file,
-            lllite_en=False, lllite_model="None", lllite_img=None, lllite_str=1.0, lllite_start=0.0, lllite_end=1.0):
+            lllite_en=False, lllite_model="None", lllite_img=None, lllite_str=1.0, lllite_start=0.0, lllite_end=1.0, lllite_auto_res=True):
     """連続生成(Auto Gen)用のジェネレーター関数（50件で自動停止）"""
     auto_images = []
     
@@ -127,7 +127,7 @@ def continuous_predict(prompt, neg_prompt, trigger_first, enable_negpip, seed, r
         output_image, status, new_history, _, _, _ = predict(
             prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, 
             l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, artist_tags, artist_random_en, artist_random_num, artist_tags_list, custom_tags, current_comfy_url, config, workflow_file,
-            lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end
+            lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end, lllite_auto_res
         )
         
         history = new_history
@@ -274,7 +274,7 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
     ]
 
 def restore_from_history_by_index(idx, history):
-    if idx < 0 or not history or idx >= len(history): return [gr.update()] * 44
+    if idx < 0 or not history or idx >= len(history): return [gr.update()] * 45
     s = history[idx]
     return (
         s["prompt"], s["neg_prompt"], s.get("trigger_first", False), s.get("enable_negpip", False), s["seed"], True, s["cfg"], s["steps"], s["width"], s["height"],
@@ -302,7 +302,8 @@ def restore_from_history_by_index(idx, history):
         s.get("lllite_img", None),
         float(s.get("lllite_str", 1.0)),
         float(s.get("lllite_start", 0.0)),
-        float(s.get("lllite_end", 1.0))
+        float(s.get("lllite_end", 1.0)),
+        s.get("lllite_auto_res", True)
     )
 def check_url_warning(config):
     current_url = config.get("comfy_url", "")
