@@ -3,6 +3,7 @@ import ui_handlers
 import deepl_translator
 import system_manager
 import config_utils
+import comfy_utils
 import history_utils 
 import ui_javascript
 import pandas as pd
@@ -208,13 +209,39 @@ def get_checkpoint_list(config):
                 possible_paths = [
                     os.path.join(base_dir, "models", "checkpoints"),
                     os.path.join(base_dir, "ComfyUI", "models", "checkpoints"),
+                    os.path.join(base_dir, "models", "diffusion_models"),
+                    os.path.join(base_dir, "ComfyUI", "models", "diffusion_models"),
                 ]
                 for p in possible_paths:
                     if os.path.exists(p):
                         files = glob.glob(os.path.join(p, "**", "*.safetensors"), recursive=True)
                         ckpts += [os.path.relpath(f, p) for f in files]
-                        break
     return sorted(list(set(ckpts)))
+
+def get_controlnet_list(config):
+    """ComfyUIから利用可能なControlNetのリストを取得する"""
+    cn_models = ["None"]
+    bat_path = config.get("launch_bat")
+    comfy_url = config.get("comfy_url", "").strip().rstrip("/")
+
+    if comfy_url:
+        try:
+            response = requests.get(f"{comfy_url}/models/controlnet", timeout=2)
+            response.raise_for_status()
+            cn_models.extend(response.json())
+        except requests.exceptions.RequestException as e:
+            if bat_path:
+                base_dir = os.path.dirname(bat_path)
+                possible_paths = [
+                    os.path.join(base_dir, "models", "controlnet"),
+                    os.path.join(base_dir, "ComfyUI", "models", "controlnet"),
+                ]
+                for p in possible_paths:
+                    if os.path.exists(p):
+                        files = glob.glob(os.path.join(p, "**", "*.safetensors"), recursive=True) + glob.glob(os.path.join(p, "**", "*.pth"), recursive=True)
+                        cn_models += [os.path.relpath(f, p) for f in files]
+                        break
+    return sorted(list(set(cn_models)))
 
 def update_lora_strength(name, current_str):
     """LoRA選択時に強度を自動調整する"""
@@ -270,6 +297,26 @@ def create_ui(config):
     
     # Checkpointリストの取得
     ckpt_files = get_checkpoint_list(config)
+    lllite_files = get_controlnet_list(config)
+    
+    # ワークフローからデフォルトのチェックポイント名（重みの名前）を取得
+    default_ckpt = "None"
+    if workflow_file and os.path.exists(workflow_file):
+        workflow = comfy_utils.load_workflow(workflow_file)
+        if workflow:
+            ckpt_node_id = comfy_utils.find_node_by_title(workflow, "拡散モデルを読み込む") or comfy_utils.find_node_by_title(workflow, "Load Checkpoint")
+            if not ckpt_node_id:
+                for nid, node in workflow.items():
+                    class_type = node.get("class_type", "") if isinstance(node, dict) else ""
+                    if class_type in ["CheckpointLoaderSimple", "UNETLoader"]:
+                        ckpt_node_id = nid
+                        break
+            if ckpt_node_id:
+                inputs = workflow[ckpt_node_id].get("inputs", {})
+                default_ckpt = inputs.get("unet_name", inputs.get("ckpt_name", "None"))
+                if default_ckpt != "None" and default_ckpt not in ckpt_files:
+                    ckpt_files.append(default_ckpt)
+                    ckpt_files.sort()
 
     # --- 2. タグデータのロード (オートコンプリート用) ---
     tags_csv_path = config.get("tags_csv_path", "danbooru_tags.csv")
@@ -397,7 +444,9 @@ def create_ui(config):
                                 btn_toggle = gr.Button("ON/OFF", size="sm", min_width=60, variant="secondary")
                                 
                             prompt_input = gr.Textbox(label="Positive Prompt", show_label=False, lines=5, elem_id="prompt_input_area")
-                            trigger_first = gr.Checkbox(label="Treat first tag as Trigger Word (Move to absolute front)", value=False)
+                            with gr.Row():
+                                trigger_first = gr.Checkbox(label="Treat first tag as Trigger Word", value=False, scale=2)
+                                enable_negpip = gr.Checkbox(label="Enable NegPiP", value=False, scale=1)
                         with gr.Accordion("Negative Prompt", open=False):
                             with gr.Group():
                                 with gr.Row(variant="compact"):
@@ -454,13 +503,23 @@ def create_ui(config):
                                         l5_name = gr.Dropdown(label="LoRA 5 Model", choices=lora_files, value="None")
                                         l5_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
 
+                        with gr.Accordion("Anima ControlNet-LLLite Settings", open=False):
+                            with gr.Row():
+                                lllite_en = gr.Checkbox(label="Enable LLLite", value=False, scale=1)
+                                lllite_model = gr.Dropdown(label="LLLite Model", choices=lllite_files, value="None", allow_custom_value=True, scale=3)
+                            lllite_img = gr.Image(type="filepath", label="Reference Image (Upload)", height=150)
+                            with gr.Row():
+                                lllite_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=1.0)
+                                lllite_start = gr.Slider(label="Start Percent", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
+                                lllite_end = gr.Slider(label="End Percent", minimum=0.0, maximum=1.0, step=0.01, value=1.0)
+
                         with gr.Accordion("Advanced Settings", open=False):
                             with gr.Row():
                                 sampler_dropdown = gr.Dropdown(label="Sampler", choices=["er_sde", "euler_ancestral", "res_multistep"], value="euler_ancestral")
                                 res_preset = gr.Dropdown(label="Resolution Preset", choices=list(RESOLUTION_PRESETS.keys()) + ["Custom"], value=default_res_key)
                             
                             with gr.Row():
-                                ckpt_name = gr.Dropdown(label="Checkpoint Model", choices=ckpt_files, value="None")
+                                ckpt_name = gr.Dropdown(label="Checkpoint Model", choices=ckpt_files, value=default_ckpt)
                                 cfg_steps_preset = gr.Dropdown(label="CFG & Steps Preset", choices=list(CFG_STEPS_PRESETS.keys()) + ["Custom"], value=default_cfg_steps_key)
                             with gr.Row():
                                 cfg_slider = gr.Slider(label="CFG", minimum=1.0, maximum=20.0, value=default_cfg, step=0.1)
@@ -508,10 +567,10 @@ def create_ui(config):
                 with gr.Accordion("Applied Positive Prompt", open=False, visible=False) as pos_accordion:
                     selected_prompt_preview = gr.Textbox(show_label=False, interactive=False, lines=3)
 
-                # HistoryタブにLoRA情報を表示するためのUIを追加
-                h_ckpt_name = gr.Textbox(label="Checkpoint Model", interactive=False)
-                h_lora1_name = gr.Textbox(label="LoRA 1 Model", interactive=False)
-                h_lora1_strength = gr.Number(label="LoRA 1 Strength", interactive=False)
+                with gr.Accordion("Applied Models & LoRAs", open=False, visible=False) as models_accordion:
+                    h_ckpt_name = gr.Textbox(label="Checkpoint Model", interactive=False)
+                    h_lora1_name = gr.Textbox(label="LoRA 1 Model", interactive=False)
+                    h_lora1_strength = gr.Number(label="LoRA 1 Strength", interactive=False)
                 
                 with gr.Accordion("Applied Negative Prompt", open=False, visible=False) as neg_accordion:
                     h_neg_prompt = gr.Textbox(show_label=False, interactive=False, lines=2)
@@ -688,9 +747,10 @@ def create_ui(config):
         
         predict_params = dict(
             fn=ui_handlers.predict, 
-            inputs=[prompt_input, neg_input, trigger_first, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, history_state, ckpt_name, 
+            inputs=[prompt_input, neg_input, trigger_first, enable_negpip, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, history_state, ckpt_name, 
                     l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, artist_tags_input, artist_random_en, artist_random_num, artist_tags_state,
-                    custom_tags_input, url_in, config_state, workflow_file_state], 
+                    custom_tags_input, url_in, config_state, workflow_file_state,
+                    lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end], 
             outputs=[image_output, status_output, history_state, history_gallery, page_state, page_label]
         )
         generate_button.click(**predict_params); generate_button_side.click(**predict_params)
@@ -698,9 +758,10 @@ def create_ui(config):
         # 連続生成 (Auto Gen) イベント
         auto_gen_event = start_auto_btn.click(
             fn=ui_handlers.continuous_predict,
-            inputs=[prompt_input, neg_input, trigger_first, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, history_state, ckpt_name, 
+            inputs=[prompt_input, neg_input, trigger_first, enable_negpip, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, history_state, ckpt_name, 
                     l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, artist_tags_input, artist_random_en, artist_random_num, artist_tags_state,
-                    custom_tags_input, url_in, config_state, workflow_file_state],
+                    custom_tags_input, url_in, config_state, workflow_file_state,
+                    lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end],
             outputs=[auto_gallery, auto_status, history_state]
         )
 
@@ -726,6 +787,7 @@ def create_ui(config):
                 tag_accordion,
                 neg_accordion,
                 pos_accordion,
+                models_accordion,
                 download_original_file,
                 fav_btn
             ]
@@ -733,10 +795,11 @@ def create_ui(config):
         
         # Restore時にLoRA情報も復元する
         restore_btn.click(fn=ui_handlers.restore_from_history_by_index, inputs=[selected_index, history_state],
-            outputs=[prompt_input, neg_input, trigger_first, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider,
+            outputs=[prompt_input, neg_input, trigger_first, enable_negpip, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider,
                      sampler_dropdown, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val,
                      decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, artist_tags_input, custom_tags_input, tabs, 
-                     ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, turbo_lora_en, highres_lora_en, l4_name, l4_str, l5_name, l5_str])
+                     ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, turbo_lora_en, highres_lora_en, l4_name, l4_str, l5_name, l5_str,
+                     lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end])
 
         delete_entry_btn.click(fn=lambda: (gr.update(visible=False), gr.update(visible=True)), outputs=[delete_entry_btn, confirm_delete_row])
         no_delete_btn.click(fn=lambda: (gr.update(visible=True), gr.update(visible=False)), outputs=[delete_entry_btn, confirm_delete_row])
@@ -750,7 +813,7 @@ def create_ui(config):
                 h_ckpt_name,
                 h_lora1_name, h_lora1_strength,
                 delete_entry_btn, confirm_delete_row, restore_btn, send_to_chat_btn,
-                tag_accordion, neg_accordion, pos_accordion, page_state, page_label,
+                tag_accordion, neg_accordion, pos_accordion, models_accordion, page_state, page_label,
                 download_original_file,
                 fav_btn
             ]

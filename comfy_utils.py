@@ -3,6 +3,7 @@ import requests
 import time
 import io
 import traceback
+import os
 from PIL import Image
 
 def load_workflow(workflow_path):
@@ -86,3 +87,17 @@ def find_node_by_title(workflow, title):
         if "_meta" in node and node["_meta"].get("title") == title:
             return node_id
     return None
+
+def upload_image(file_path, comfy_url):
+    """Gradioで取得した画像をComfyUIにアップロードし、ファイル名を返す"""
+    if not file_path or not os.path.exists(file_path):
+        return None
+    try:
+        with open(file_path, "rb") as f:
+            files = {"image": f}
+            res = requests.post(f"{comfy_url}/upload/image", files=files, timeout=10)
+            res.raise_for_status()
+            return res.json()["name"]
+    except Exception as e:
+        print(f"⚠️ Failed to upload image: {e}")
+        return None

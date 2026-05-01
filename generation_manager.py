@@ -6,12 +6,13 @@ import datetime # 【追加】現在時刻を取得するために必要
 import traceback
 
 def generate_and_save(
-    prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
+    prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
     ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str,
     turbo_lora_en, highres_lora_en,
     quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, 
     decade_tags, period_tags, meta_tags, safety_tags, artist_tags, custom_tags, 
-    current_comfy_url, workflow_file, config
+    current_comfy_url, workflow_file, config,
+    lllite_en=False, lllite_model="None", lllite_img=None, lllite_str=1.0, lllite_start=0.0, lllite_end=1.0
 ):
     """
     ワークフローの初期タイトル値を使用して、IDを動的に特定する生成マネージャー。
@@ -84,6 +85,74 @@ def generate_and_save(
         full_positive_prompt = prefix + active_prompt if active_prompt else prefix.rstrip(', ')
         
     active_neg_prompt = ", ".join([t.strip() for t in neg_prompt.split(",") if t.strip() and not t.strip().startswith("#")])
+
+    # --- NegPiP ノードの制御 ---
+    negpip_node_id = comfy_utils.find_node_by_title(workflow, "NegPiP")
+    if not negpip_node_id:
+        for nid, node in workflow.items():
+            class_type = node.get("class_type", "") if isinstance(node, dict) else ""
+            if "NegPiP" in class_type or "negpip" in class_type.lower():
+                negpip_node_id = nid
+                break
+
+    if negpip_node_id:
+        if enable_negpip:
+            if "text" in workflow[negpip_node_id].get("inputs", {}):
+                workflow[negpip_node_id]["inputs"]["text"] = full_positive_prompt
+        else:
+            # NegPiPをオフにする場合。ノードにバイパス用プロパティがあれば設定する。
+            # ※ComfyUI APIでノードを完全にバイパスするにはKSamplerへの繋ぎ変えが必要になる場合があります。
+            pass
+
+    # --- Anima ControlNet-LLLite ノードの制御 ---
+    lllite_node_id = comfy_utils.find_node_by_title(workflow, "LLLite")
+    if not lllite_node_id:
+        for nid, node in workflow.items():
+            class_type = node.get("class_type", "") if isinstance(node, dict) else ""
+            if "LLLite" in class_type or "lllite" in class_type.lower():
+                lllite_node_id = nid
+                break
+                
+    if lllite_node_id:
+        if lllite_en:
+            uploaded_filename = None
+            if lllite_img:
+                active_url = str(current_comfy_url).strip().rstrip("/")
+                uploaded_filename = comfy_utils.upload_image(lllite_img, active_url)
+                
+            if "model_name" in workflow[lllite_node_id].get("inputs", {}):
+                workflow[lllite_node_id]["inputs"]["model_name"] = lllite_model
+            if "strength" in workflow[lllite_node_id].get("inputs", {}):
+                workflow[lllite_node_id]["inputs"]["strength"] = float(lllite_str)
+            if "start_percent" in workflow[lllite_node_id].get("inputs", {}):
+                workflow[lllite_node_id]["inputs"]["start_percent"] = float(lllite_start)
+            if "end_percent" in workflow[lllite_node_id].get("inputs", {}):
+                workflow[lllite_node_id]["inputs"]["end_percent"] = float(lllite_end)
+                
+            if uploaded_filename:
+                def find_upstream_load_image(node_id):
+                    node = workflow.get(str(node_id), {})
+                    if node.get("class_type") == "LoadImage":
+                        return str(node_id)
+                    for k, v in node.get("inputs", {}).items():
+                        if isinstance(v, list) and len(v) == 2:
+                            found = find_upstream_load_image(v[0])
+                            if found:
+                                return found
+                    return None
+                
+                load_image_id = find_upstream_load_image(lllite_node_id)
+                if load_image_id:
+                    workflow[load_image_id]["inputs"]["image"] = uploaded_filename
+                else:
+                    for nid, node in workflow.items():
+                        if node.get("class_type") == "LoadImage":
+                            node["inputs"]["image"] = uploaded_filename
+                            break
+        else:
+            # 無効化時は強度を0にする
+            if "strength" in workflow[lllite_node_id].get("inputs", {}):
+                workflow[lllite_node_id]["inputs"]["strength"] = 0.0
 
     # 4. シード値の決定
     final_seed = random.randint(0, 0xffffffffffffffff) if randomize_seed else int(seed)
@@ -196,7 +265,7 @@ def generate_and_save(
 
         # 7. 保存用データの構築
         new_entry = {
-            "prompt": prompt, "neg_prompt": neg_prompt, "trigger_first": trigger_first, "seed": final_seed, "cfg": cfg, 
+            "prompt": prompt, "neg_prompt": neg_prompt, "trigger_first": trigger_first, "enable_negpip": enable_negpip, "seed": final_seed, "cfg": cfg, 
             "steps": steps, "width": width, "height": height, "sampler_name": sampler_name, 
             "quality_tags": quality_tags, "y1_en": y1_en, "y1_val": y1_val, 
             "y2_en": y2_en, "y2_val": y2_val, "y3_en": y3_en, "y3_val": y3_val,
@@ -209,7 +278,9 @@ def generate_and_save(
             "lora2_name": l2_name, "lora2_strength": l2_str,
             "lora3_name": l3_name, "lora3_strength": l3_str,
             "lora4_name": l4_name, "lora4_strength": l4_str,
-            "lora5_name": l5_name, "lora5_strength": l5_str
+            "lora5_name": l5_name, "lora5_strength": l5_str,
+            "lllite_en": lllite_en, "lllite_model": lllite_model, "lllite_img": lllite_img, 
+            "lllite_str": lllite_str, "lllite_start": lllite_start, "lllite_end": lllite_end
         }
 
         # 8. 履歴への追加実行

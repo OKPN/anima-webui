@@ -77,10 +77,10 @@ def handle_save_settings(url, bat_path, backup_path, real_out_path, workflow_fil
     )
     return "✅ 保存完了。再起動後に反映されます。" if success else "❌ 保存失敗。"
 
-def predict(prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, 
+def predict(prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, 
             l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags, 
-            y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, artist_tags, artist_random_en, artist_random_num, artist_tags_list, custom_tags, current_comfy_url,
-            config, workflow_file):
+            y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, artist_tags, artist_random_en, artist_random_num, artist_tags_list, custom_tags, current_comfy_url, config, workflow_file,
+            lllite_en=False, lllite_model="None", lllite_img=None, lllite_str=1.0, lllite_start=0.0, lllite_end=1.0):
     
     # プロンプトのクリーニング処理 (アンダースコアをスペースに変換、scoreタグは除外)
     prompt = process_underscores(prompt)
@@ -98,12 +98,13 @@ def predict(prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps,
 
     try:
         output_image, status, saved_entry = generation_manager.generate_and_save(
-            prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
+            prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
             ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str,
             turbo_lora_en, highres_lora_en,
             quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, 
             decade_tags, period_tags, meta_tags, safety_tags, artist_tags, custom_tags, 
-            current_comfy_url, workflow_file, config
+            current_comfy_url, workflow_file, config,
+            lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end
         )
         if saved_entry:
             history.insert(0, saved_entry)
@@ -115,16 +116,18 @@ def predict(prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps,
         traceback.print_exc()
         return None, f"❌ System Error: {str(e)}", history, gr.update(), gr.update(), gr.update()
 
-def continuous_predict(prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, 
-            l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, artist_tags, artist_random_en, artist_random_num, artist_tags_list, custom_tags, current_comfy_url, config, workflow_file):
+def continuous_predict(prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, 
+            l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, artist_tags, artist_random_en, artist_random_num, artist_tags_list, custom_tags, current_comfy_url, config, workflow_file,
+            lllite_en=False, lllite_model="None", lllite_img=None, lllite_str=1.0, lllite_start=0.0, lllite_end=1.0):
     """連続生成(Auto Gen)用のジェネレーター関数（50件で自動停止）"""
     auto_images = []
     
     for i in range(50):
         # 既存のpredict関数を呼び出して画像を1枚生成
         output_image, status, new_history, _, _, _ = predict(
-            prompt, neg_prompt, trigger_first, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, 
-            l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, artist_tags, artist_random_en, artist_random_num, artist_tags_list, custom_tags, current_comfy_url, config, workflow_file
+            prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, 
+            l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, artist_tags, artist_random_en, artist_random_num, artist_tags_list, custom_tags, current_comfy_url, config, workflow_file,
+            lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end
         )
         
         history = new_history
@@ -217,6 +220,7 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
             gr.update(visible=False), # Tag
             gr.update(visible=False), # Neg
             gr.update(visible=False), # Pos
+            gr.update(visible=False), # Models
             gr.update(visible=False, value=None),
             gr.update(visible=False) # fav_btn
         ]
@@ -264,15 +268,16 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
         gr.update(visible=True),  # TagAccordion
         gr.update(visible=True),  # NegPromptAccordion
         gr.update(visible=True),  # PosAccordion
+        gr.update(visible=True),  # ModelsAccordion
         gr.update(visible=True, value=original_image_path),
         gr.update(visible=True, value=fav_label, variant=fav_variant) # fav_btn
     ]
 
 def restore_from_history_by_index(idx, history):
-    if idx < 0 or not history or idx >= len(history): return [gr.update()] * 30
+    if idx < 0 or not history or idx >= len(history): return [gr.update()] * 44
     s = history[idx]
     return (
-        s["prompt"], s["neg_prompt"], s.get("trigger_first", False), s["seed"], True, s["cfg"], s["steps"], s["width"], s["height"],
+        s["prompt"], s["neg_prompt"], s.get("trigger_first", False), s.get("enable_negpip", False), s["seed"], True, s["cfg"], s["steps"], s["width"], s["height"],
 
         s.get("sampler_name", "euler_ancestral"), s.get("quality_tags", []),
         s.get("y1_en", False), s.get("y1_val", "2026"), s.get("y2_en", False), s.get("y2_val", "2025"),
@@ -291,7 +296,13 @@ def restore_from_history_by_index(idx, history):
         s.get("lora4_name", "None"),
         float(s.get("lora4_strength", 0.0)),
         s.get("lora5_name", "None"),
-        float(s.get("lora5_strength", 0.0))
+        float(s.get("lora5_strength", 0.0)),
+        s.get("lllite_en", False),
+        s.get("lllite_model", "None"),
+        s.get("lllite_img", None),
+        float(s.get("lllite_str", 1.0)),
+        float(s.get("lllite_start", 0.0)),
+        float(s.get("lllite_end", 1.0))
     )
 def check_url_warning(config):
     current_url = config.get("comfy_url", "")
@@ -343,7 +354,7 @@ def handle_delete_entry(idx, history, page, show_favs):
                 gr.update(visible=False), gr.update(visible=False), gr.update(visible=False),
                 gr.update(visible=False), # send_to_chat
                 gr.update(visible=False), gr.update(visible=False),
-                gr.update(visible=False), page, gr.update(),
+                gr.update(visible=False), gr.update(visible=False), page, gr.update(),
                 gr.update(visible=False, value=None),
                 gr.update(visible=False))
     
@@ -357,7 +368,7 @@ def handle_delete_entry(idx, history, page, show_favs):
                 gr.update(visible=False), gr.update(visible=False), gr.update(visible=False),
                 gr.update(visible=False), # send_to_chat
                 gr.update(visible=False), gr.update(visible=False),
-                gr.update(visible=False), 0, get_page_label(0, [], show_favs),
+                gr.update(visible=False), gr.update(visible=False), 0, get_page_label(0, [], show_favs),
                 gr.update(visible=False, value=None),
                 gr.update(visible=False))
     
@@ -390,6 +401,7 @@ def handle_delete_entry(idx, history, page, show_favs):
         gr.update(visible=False),  # TagAccordion
         gr.update(visible=False),  # NegPromptAccordion
         gr.update(visible=False),  # PosAccordion
+        gr.update(visible=False),  # ModelsAccordion
         page, new_label,          # Page State & Label
         gr.update(visible=False, value=None),
         gr.update(visible=False)
