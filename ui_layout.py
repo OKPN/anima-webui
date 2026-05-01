@@ -344,8 +344,8 @@ def create_ui(config):
 
                         with gr.Accordion("Anima ControlNet-LLLite Settings", open=False):
                             with gr.Row():
-                                lllite_en = gr.Checkbox(label="Enable LLLite", value=False, scale=1)
                                 lllite_model = gr.Dropdown(label="LLLite Model", choices=lllite_files, value="None", allow_custom_value=True, scale=3)
+                                lllite_en = gr.Checkbox(label="Enable LLLite", value=False, scale=1)
                             with gr.Row():
                                 lllite_img = gr.Image(type="filepath", label="Reference Image (Upload)", height=150, scale=3)
                                 lllite_auto_res = gr.Checkbox(label="Auto Adjust Resolution", value=default_lllite["auto_res"], info="参照画像の縦横比に合わせて出力を自動調整します", scale=1)
@@ -422,6 +422,7 @@ def create_ui(config):
                     fav_btn = gr.Button("🤍 Like", visible=False, scale=1)
                     restore_btn = gr.Button("♻️ Restore & Go", variant="primary", scale=2, visible=False)
                     send_to_chat_btn = gr.Button("💬 Send to AI Chat", variant="secondary", scale=2, visible=False)
+                    send_to_lllite_btn = gr.Button("🖼️ Set to LLLite", variant="secondary", scale=2, visible=False)
                     delete_entry_btn = gr.Button("🗑️ Delete", variant="stop", visible=False, scale=1)
                     with gr.Row(visible=False) as confirm_delete_row:
                         gr.Markdown("⚠️ **Delete?**")
@@ -590,6 +591,13 @@ def create_ui(config):
         res_preset.change(fn=lambda p: RESOLUTION_PRESETS.get(p, [gr.update(), gr.update()]), inputs=[res_preset], outputs=[width_slider, height_slider])
         cfg_steps_preset.change(fn=lambda p: CFG_STEPS_PRESETS.get(p, [gr.update(), gr.update()]), inputs=[cfg_steps_preset], outputs=[cfg_slider, steps_slider])
         
+        def auto_update_cfg_steps_on_turbo(is_turbo):
+            preset_name = "Fast (LCM/Turbo)" if is_turbo else "Standard"
+            vals = CFG_STEPS_PRESETS.get(preset_name, [5.0, 30])
+            return preset_name, vals[0], vals[1]
+            
+        turbo_lora_en.change(fn=auto_update_cfg_steps_on_turbo, inputs=[turbo_lora_en], outputs=[cfg_steps_preset, cfg_slider, steps_slider])
+
         predict_params = dict(
             fn=ui_handlers.predict, 
             inputs=[prompt_input, neg_input, trigger_first, enable_negpip, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, history_state, ckpt_name, 
@@ -629,6 +637,7 @@ def create_ui(config):
                 delete_entry_btn, confirm_delete_row,
                 restore_btn,
                 send_to_chat_btn,
+                send_to_lllite_btn,
                 tag_accordion,
                 neg_accordion,
                 pos_accordion,
@@ -657,7 +666,7 @@ def create_ui(config):
                 selected_prompt_preview, h_neg_prompt,
                 h_ckpt_name,
                 h_lora1_name, h_lora1_strength,
-                delete_entry_btn, confirm_delete_row, restore_btn, send_to_chat_btn,
+                delete_entry_btn, confirm_delete_row, restore_btn, send_to_chat_btn, send_to_lllite_btn,
                 tag_accordion, neg_accordion, pos_accordion, models_accordion, page_state, page_label,
                 download_original_file,
                 fav_btn
@@ -669,6 +678,13 @@ def create_ui(config):
             fn=ui_handlers.send_to_chat_action,
             inputs=[selected_index, history_state, config_state],
             outputs=[chat_img_input, chat_msg_input, tabs]
+        )
+
+        # LLLiteに送るイベント
+        send_to_lllite_btn.click(
+            fn=ui_handlers.send_to_lllite_action,
+            inputs=[selected_index, history_state, config_state],
+            outputs=[lllite_img, tabs]
         )
 
         clear_history_btn.click(fn=lambda: (gr.update(visible=False), gr.update(visible=True), gr.update(visible=True)), 

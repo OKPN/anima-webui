@@ -199,6 +199,15 @@ def send_to_chat_action(idx, history, config):
     msg_text = full_prompt
     return img_path, msg_text, gr.update(selected=4)
 
+def send_to_lllite_action(idx, history, config):
+    if idx < 0 or not history or idx >= len(history):
+        return gr.update(), gr.update()
+        
+    item = history[idx]
+    img_path = history_utils.resolve_image_path(item, config)
+    
+    return img_path, gr.update(selected=0)
+
 def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
     # ページネーションを考慮したインデックス計算
     view_index = (page * GALLERY_PER_PAGE) + evt.index
@@ -217,6 +226,7 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
             gr.update(visible=False), # Confirm
             gr.update(visible=False), # Restore
             gr.update(visible=False), # Send to Chat
+            gr.update(visible=False), # Send to LLLite
             gr.update(visible=False), # Tag
             gr.update(visible=False), # Neg
             gr.update(visible=False), # Pos
@@ -265,6 +275,7 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
         gr.update(visible=False), # Confirm
         gr.update(visible=True),  # Restore
         gr.update(visible=True),  # Send to Chat
+        gr.update(visible=True),  # Send to LLLite
         gr.update(visible=True),  # TagAccordion
         gr.update(visible=True),  # NegPromptAccordion
         gr.update(visible=True),  # PosAccordion
@@ -354,6 +365,7 @@ def handle_delete_entry(idx, history, page, show_favs):
                 "", "", 0.0,
                 gr.update(visible=False), gr.update(visible=False), gr.update(visible=False),
                 gr.update(visible=False), # send_to_chat
+                gr.update(visible=False), # send_to_lllite
                 gr.update(visible=False), gr.update(visible=False),
                 gr.update(visible=False), gr.update(visible=False), page, gr.update(),
                 gr.update(visible=False, value=None),
@@ -368,6 +380,7 @@ def handle_delete_entry(idx, history, page, show_favs):
                 "", "", 0.0,
                 gr.update(visible=False), gr.update(visible=False), gr.update(visible=False),
                 gr.update(visible=False), # send_to_chat
+                gr.update(visible=False), # send_to_lllite
                 gr.update(visible=False), gr.update(visible=False),
                 gr.update(visible=False), gr.update(visible=False), 0, get_page_label(0, [], show_favs),
                 gr.update(visible=False, value=None),
@@ -399,6 +412,7 @@ def handle_delete_entry(idx, history, page, show_favs):
         gr.update(visible=False), # Confirm
         gr.update(visible=False),  # Restore
         gr.update(visible=False),  # Send to Chat
+        gr.update(visible=False),  # Send to LLLite
         gr.update(visible=False),  # TagAccordion
         gr.update(visible=False),  # NegPromptAccordion
         gr.update(visible=False),  # PosAccordion
