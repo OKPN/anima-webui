@@ -5,6 +5,7 @@ import history_utils
 import datetime # 【追加】現在時刻を取得するために必要
 import traceback
 import math
+from PIL import Image
 
 def generate_and_save(
     prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
@@ -163,7 +164,6 @@ def generate_and_save(
     # 参照画像のアスペクト比に合わせて新しい Width と Height を計算します。
     if lllite_node_id and lllite_en and lllite_img and lllite_auto_res:
         try:
-            from PIL import Image
             with Image.open(lllite_img) as ref_img:
                 img_w, img_h = ref_img.size
             
@@ -216,32 +216,9 @@ def generate_and_save(
         if "LoraLoader" in class_type or "LoRA" in title:
             lora_nodes.add(nid)
     
-    # ノードの接続関係を遡り、上流（モデル読み込み側）にあるLoRAノードの数をカウントする
-    def count_upstream_loras(nid, visited=None):
-        if visited is None:
-            visited = set()
-        if nid in visited:
-            return 0
-        visited.add(nid)
-        
-        node = workflow.get(str(nid), {})
-        inputs = node.get("inputs", {})
-        
-        max_count = 0
-        for key, value in inputs.items():
-            # ComfyUIのリンクは [node_id, port_index] のリスト形式
-            if isinstance(value, list) and len(value) >= 1:
-                source_id = str(value[0])
-                count = count_upstream_loras(source_id, visited)
-                if source_id in lora_nodes:
-                    count += 1
-                if count > max_count:
-                    max_count = count
-        return max_count
-
     # リスト化して、上流のLoRA数が少ない順（Checkpointに近い順）にソート
     sorted_loras = list(lora_nodes)
-    sorted_loras.sort(key=lambda nid: count_upstream_loras(nid))
+    sorted_loras.sort(key=lambda nid: comfy_utils.get_upstream_lora_count(workflow, lora_nodes, nid))
         
     # --- 適用するLoRAのリストを作成 ---
     active_loras = []

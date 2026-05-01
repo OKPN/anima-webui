@@ -34,6 +34,10 @@ Anima WebUI は、ComfyUI をバックエンドとして利用し、直感的な
 
         config.json.sample をコピーして config.json を作成するか、アプリ内の System タブから直接設定を行ってください。
 
+    AI Chat機能のカスタマイズ (オプション)
+        ai_chat_tones.json.sample をコピーして ai_chat_tones.json を作成することで、AIチャットのキャラクター（システムプロンプトや口調、読み上げ音声）を自由に追加・変更できます。
+        （このファイルはGitの管理外となるため、プライベートな設定を安全に保持できます）
+
     起動
 
         start_anima_webui.bat を実行します。

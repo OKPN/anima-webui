@@ -13,26 +13,29 @@ import os
 import glob
 import base64
 import mimetypes
+import json
 
 LM_STUDIO_URL = "http://127.0.0.1:1234/v1/chat/completions"
 
-TONE_CONFIG = {
-    "default": {
-        "prompt": "あなたは優秀な「画像生成のプロンプト」アシスタントです。画像とその生成プロンプトが貼られたら、ユーザの「プロンプトのどこを変えると望む絵を生成できるか？」という問いに答え、差し替え後の画像生成プロンプトを掲示してください。",
-        "caption": "落ち着いた女性の声で自然に読み上げてください。",
-        "ref_wav": None
-    },
-    "mesugaki": {
-        "prompt": "あなたは生意気で小悪魔な「メスガキ」で「画像のキュレーター」です。ユーザーを「ざぁこ♡」「よわよわ♡」などと小馬鹿にしつつも、どこか憎めない、実は構ってほしいような態度で、♡や笑などの記号を多用してフレンドリーに話してください。画像を貼られたら猥褻な、性的に露骨な表現を使って画像を解説して、ユーザから解説の指導があった場合はそれに従ってください。",
-        "caption": "メスガキのように、小馬鹿にするような煽り口調で、高めの可愛らしい少女の声で自然に読み上げてください。",
-        "ref_wav": "E:/GenAIs/Irodori-TTS/refs/ref_mesugaki01.wav"
-    },
-    "maid": {
-        "prompt": "あなたは落ち着いたメイドで「画像のキュレーター」です。丁寧で従順な態度で、ご主人様（ユーザー）に仕えるように話してください。画像を貼られたら、丁寧な言葉遣いで解説してください。",
-        "caption": "落ち着いたメイドのように、丁寧で従順な若い女性の声でやわらかく自然に読み上げてください。",
-        "ref_wav": None
+def load_tone_config():
+    default_config = {
+        "default": {
+            "label": "標準",
+            "prompt": "あなたは優秀な「画像生成のプロンプト」アシスタントです。画像とその生成プロンプトが貼られたら、ユーザの「プロンプトのどこを変えると望む絵を生成できるか？」という問いに答え、差し替え後の画像生成プロンプトを掲示してください。",
+            "caption": "落ち着いた女性の声で自然に読み上げてください。",
+            "ref_wav": None
+        }
     }
-}
+    tone_file = "ai_chat_tones.json"
+    if os.path.exists(tone_file):
+        try:
+            with open(tone_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"⚠️ Failed to load {tone_file}: {e}")
+    return default_config
+
+TONE_CONFIG = load_tone_config()
 
 def encode_image_to_base64(filepath):
     with open(filepath, "rb") as f:
@@ -80,7 +83,10 @@ def chat_and_tts(text, img_path, chatbot_history, api_history, tone, model_name)
 
     yield chatbot_history, api_history, gr.update(), gr.update(), reply
 
-def get_js_code(mode):
+def get_js_code(mode, tone_config_dict):
+    js_tone_config = {k: {"caption": v.get("caption", ""), "ref_wav": v.get("ref_wav")} for k, v in tone_config_dict.items()}
+    js_tone_config_str = json.dumps(js_tone_config, ensure_ascii=False)
+    
     code = """
     function(text, tone) {
         if (!text) return text;
@@ -99,7 +105,7 @@ def get_js_code(mode):
         const chunks = [];
         let currentChunk = '';
         for (const sentence of sentences) {
-            if (currentChunk.length + sentence.length >= 250 && currentChunk.length > 0) {
+            if (currentChunk.length + sentence.length >= 100 && currentChunk.length > 0) {
                 chunks.push(currentChunk.trim());
                 currentChunk = '';
             }
@@ -108,11 +114,7 @@ def get_js_code(mode):
         if (currentChunk.trim()) chunks.push(currentChunk.trim());
         if (chunks.length === 0) return text;
 
-        let toneConfig = {
-            "default": { caption: "落ち着いた女性の声で自然に読み上げてください。", ref_wav: null },
-            "mesugaki": { caption: "メスガキのように、小馬鹿にするような煽り口調で、高めの可愛らしい少女の声で自然に読み上げてください。", ref_wav: "E:/GenAIs/Irodori-TTS/refs/ref_mesugaki01.wav" },
-            "maid": { caption: "落ち着いたメイドのように、丁寧で従順な若い女性の声でやわらかく自然に読み上げてください。", ref_wav: null }
-        };
+        let toneConfig = TONE_CONFIG_PLACEHOLDER;
         
         let fetchAudio = async (chunkText) => {
             let payload = { text: chunkText, caption: toneConfig[tone].caption };
@@ -156,7 +158,7 @@ def get_js_code(mode):
         return text;
     }
     """
-    return code.replace("MODE_PLACEHOLDER", mode)
+    return code.replace("MODE_PLACEHOLDER", mode).replace("TONE_CONFIG_PLACEHOLDER", js_tone_config_str)
 
 def get_lora_list(config):
     """ComfyUIから利用可能なLoRAのリストを取得する。API経由を試み、失敗した場合はファイルシステムをスキャンする。"""
@@ -300,93 +302,7 @@ def create_ui(config):
     lllite_files = get_controlnet_list(config)
     
     # ワークフローからデフォルトのチェックポイント名（重みの名前）を取得
-    default_ckpt = "None"
-    default_loras = [{"name": "None", "str": 0.0} for _ in range(5)]
-    default_lllite = {"en": False, "model": "None", "str": 1.0, "start": 0.0, "end": 1.0, "auto_res": True}
-
-    if workflow_file and os.path.exists(workflow_file):
-        workflow = comfy_utils.load_workflow(workflow_file)
-        if workflow:
-            ckpt_node_id = comfy_utils.find_node_by_title(workflow, "拡散モデルを読み込む") or comfy_utils.find_node_by_title(workflow, "Load Checkpoint")
-            if not ckpt_node_id:
-                for nid, node in workflow.items():
-                    class_type = node.get("class_type", "") if isinstance(node, dict) else ""
-                    if class_type in ["CheckpointLoaderSimple", "UNETLoader"]:
-                        ckpt_node_id = nid
-                        break
-            if ckpt_node_id:
-                inputs = workflow[ckpt_node_id].get("inputs", {})
-                default_ckpt = inputs.get("unet_name", inputs.get("ckpt_name", "None"))
-                if default_ckpt != "None" and default_ckpt not in ckpt_files:
-                    ckpt_files.append(default_ckpt)
-                    ckpt_files.sort()
-
-            # --- LoRAの初期値取得 ---
-            lora_nodes = set()
-            for nid, node in workflow.items():
-                if not isinstance(node, dict): continue
-                class_type = node.get("class_type", "")
-                title = node.get("_meta", {}).get("title", "")
-                if "LoraLoader" in class_type or "LoRA" in title:
-                    lora_nodes.add(nid)
-            
-            def count_upstream_loras(nid, visited=None):
-                if visited is None:
-                    visited = set()
-                if nid in visited:
-                    return 0
-                visited.add(nid)
-                node = workflow.get(str(nid), {})
-                inputs = node.get("inputs", {})
-                max_count = 0
-                for key, value in inputs.items():
-                    if isinstance(value, list) and len(value) >= 1:
-                        source_id = str(value[0])
-                        count = count_upstream_loras(source_id, visited)
-                        if source_id in lora_nodes:
-                            count += 1
-                        if count > max_count:
-                            max_count = count
-                return max_count
-
-            sorted_loras = list(lora_nodes)
-            sorted_loras.sort(key=lambda nid: count_upstream_loras(nid))
-            
-            for i, nid in enumerate(sorted_loras):
-                if i >= 5: break
-                inputs = workflow[nid].get("inputs", {})
-                l_name = inputs.get("lora_name", "None")
-                l_str = float(inputs.get("strength_model", 0.0))
-                default_loras[i] = {"name": l_name, "str": l_str}
-                if l_name != "None" and l_name not in lora_files:
-                    lora_files.append(l_name)
-            lora_files.sort()
-
-            # --- LLLiteの初期値取得 ---
-            lllite_node_id = comfy_utils.find_node_by_title(workflow, "LLLite")
-            if not lllite_node_id:
-                for nid, node in workflow.items():
-                    class_type = node.get("class_type", "") if isinstance(node, dict) else ""
-                    if "LLLite" in class_type or "lllite" in class_type.lower():
-                        lllite_node_id = nid
-                        break
-            if lllite_node_id:
-                inputs = workflow[lllite_node_id].get("inputs", {})
-                l_model = inputs.get("model_name", "None")
-                l_str = float(inputs.get("strength", 1.0))
-                l_start = float(inputs.get("start_percent", 0.0))
-                l_end = float(inputs.get("end_percent", 1.0))
-                
-                default_lllite["model"] = l_model
-                default_lllite["str"] = l_str
-                default_lllite["start"] = l_start
-                default_lllite["end"] = l_end
-                # 設定強度が0.0より大きければ有効(Enable)とする
-                default_lllite["en"] = True if (l_str > 0.0 and l_model != "None") else False
-                
-                if l_model != "None" and l_model not in lllite_files:
-                    lllite_files.append(l_model)
-            lllite_files.sort()
+    default_ckpt, default_loras, default_lllite = comfy_utils.extract_default_settings(workflow_file, ckpt_files, lora_files, lllite_files)
 
     # --- 2. タグデータのロード (オートコンプリート用) ---
     tags_csv_path = config.get("tags_csv_path", "danbooru_tags.csv")
@@ -732,7 +648,7 @@ def create_ui(config):
             with gr.Tab("💬 AI Chat", id=4):
                 with gr.Row():
                     chat_clear_btn = gr.Button("会話履歴をクリア")
-                    chat_model_input = gr.Textbox(label="LM Studio モデル名", value="openai/gemma-4-26b-a4b-it-heretic-ara-v2-i1", scale=3)
+                    chat_model_input = gr.Textbox(label="LM Studio モデル名", value="gemma-4-26b-a4b-it-heretic-ara-v2-i1", scale=3)
 
                 chat_chatbot = gr.Chatbot(height=500, label="チャット履歴")
                 
@@ -749,9 +665,11 @@ def create_ui(config):
                         chat_msg_input = gr.Textbox(show_label=False, placeholder="メッセージを入力... (Enterで送信)", lines=2)
                 
                 with gr.Row():
+                    tone_choices = [(v.get("label", k), k) for k, v in TONE_CONFIG.items()]
+                    default_tone = "default" if "default" in TONE_CONFIG else list(TONE_CONFIG.keys())[0]
                     chat_tone_dropdown = gr.Dropdown(
-                        choices=[("標準", "default"), ("メスガキ風", "mesugaki"), ("メイド風", "maid")],
-                        value="default",
+                        choices=tone_choices,
+                        value=default_tone,
                         label="口調（Tone）の設定"
                     )
                     chat_send_btn = gr.Button("送信", variant="primary")
@@ -955,8 +873,8 @@ def create_ui(config):
         chat_msg_input.submit(chat_and_tts, inputs=chat_inputs, outputs=chat_outputs)
         chat_clear_btn.click(lambda: ([], [], None, "", ""), inputs=None, outputs=[chat_chatbot, chat_api_history, chat_img_input, chat_msg_input, chat_latest_ai_msg])
 
-        chat_play_btn.click(fn=None, inputs=[chat_latest_ai_msg, chat_tone_dropdown], outputs=[chat_latest_ai_msg], js=get_js_code('normal'))
-        chat_loop_btn.click(fn=None, inputs=[chat_latest_ai_msg, chat_tone_dropdown], outputs=[chat_latest_ai_msg], js=get_js_code('loop'))
-        chat_stop_btn.click(fn=None, inputs=[chat_latest_ai_msg, chat_tone_dropdown], outputs=[chat_latest_ai_msg], js=get_js_code('stop'))
+        chat_play_btn.click(fn=None, inputs=[chat_latest_ai_msg, chat_tone_dropdown], outputs=[chat_latest_ai_msg], js=get_js_code('normal', TONE_CONFIG))
+        chat_loop_btn.click(fn=None, inputs=[chat_latest_ai_msg, chat_tone_dropdown], outputs=[chat_latest_ai_msg], js=get_js_code('loop', TONE_CONFIG))
+        chat_stop_btn.click(fn=None, inputs=[chat_latest_ai_msg, chat_tone_dropdown], outputs=[chat_latest_ai_msg], js=get_js_code('stop', TONE_CONFIG))
 
     return demo
