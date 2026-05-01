@@ -393,7 +393,11 @@ def create_ui(config):
                     fav_filter_btn = gr.Button("❤ Favorites Only", scale=1)
                 
                 # 初期値としてサーバー起動時の最新データをセット（ページネーション適用済み）
-                history_gallery = gr.Gallery(label="Past Generations", columns=4, height="auto", value=ui_handlers.get_gallery_display_data(raw_history_startup, config, 0))
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        history_gallery = gr.Gallery(label="Past Generations", columns=4, height="auto", value=ui_handlers.get_gallery_display_data(raw_history_startup, config, 0))
+                    with gr.Column(scale=1):
+                        history_preview = gr.Image(label="Original Image Preview", interactive=False, visible=False)
                 
                 with gr.Accordion("Selected Tag Groups", open=False, visible=False) as tag_accordion:
                     h_q_tags = gr.Textbox(label="Quality Tags", interactive=False, lines=2) 
@@ -643,7 +647,8 @@ def create_ui(config):
                 pos_accordion,
                 models_accordion,
                 download_original_file,
-                fav_btn
+                fav_btn,
+                history_preview
             ]
         )
         
@@ -669,7 +674,8 @@ def create_ui(config):
                 delete_entry_btn, confirm_delete_row, restore_btn, send_to_chat_btn, send_to_lllite_btn,
                 tag_accordion, neg_accordion, pos_accordion, models_accordion, page_state, page_label,
                 download_original_file,
-                fav_btn
+                fav_btn,
+                history_preview
             ]
         )
         
@@ -692,7 +698,7 @@ def create_ui(config):
         no_clear_btn.click(fn=lambda: (gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)), 
                                 outputs=[clear_history_btn, clear_history_notice, confirm_clear_row]) 
         yes_clear_btn.click(fn=ui_handlers.handle_clear_history, inputs=[history_state], 
-                                outputs=[history_state, history_gallery, selected_prompt_preview, clear_history_notice, confirm_clear_row, clear_history_btn, page_state, page_label, download_original_file, fav_btn])
+                                outputs=[history_state, history_gallery, selected_prompt_preview, clear_history_notice, confirm_clear_row, clear_history_btn, page_state, page_label, download_original_file, fav_btn, history_preview])
         
         backup_history_btn.click(fn=lambda: gr.update(value=ui_handlers.backup_history_action(config)), outputs=[history_msg])
 

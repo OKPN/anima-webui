@@ -232,7 +232,8 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
             gr.update(visible=False), # Pos
             gr.update(visible=False), # Models
             gr.update(visible=False, value=None),
-            gr.update(visible=False) # fav_btn
+            gr.update(visible=False), # fav_btn
+            gr.update(visible=False, value=None) # history_preview
         ]
     
     item = target_list[view_index]
@@ -281,7 +282,8 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
         gr.update(visible=True),  # PosAccordion
         gr.update(visible=True),  # ModelsAccordion
         gr.update(visible=True, value=original_image_path),
-        gr.update(visible=True, value=fav_label, variant=fav_variant) # fav_btn
+        gr.update(visible=True, value=fav_label, variant=fav_variant), # fav_btn
+        gr.update(visible=True, value=original_image_path) # history_preview
     ]
 
 def restore_from_history_by_index(idx, history):
@@ -369,7 +371,8 @@ def handle_delete_entry(idx, history, page, show_favs):
                 gr.update(visible=False), gr.update(visible=False),
                 gr.update(visible=False), gr.update(visible=False), page, gr.update(),
                 gr.update(visible=False, value=None),
-                gr.update(visible=False))
+                gr.update(visible=False),
+                gr.update(visible=False, value=None))
     
     current_config = config_utils.load_config()
     new_h = history_utils.delete_history_entry(current_config, history, idx)
@@ -384,7 +387,8 @@ def handle_delete_entry(idx, history, page, show_favs):
                 gr.update(visible=False), gr.update(visible=False),
                 gr.update(visible=False), gr.update(visible=False), 0, get_page_label(0, [], show_favs),
                 gr.update(visible=False, value=None),
-                gr.update(visible=False))
+                gr.update(visible=False),
+                gr.update(visible=False, value=None))
     
     # 削除後にページ範囲外にならないよう調整
     if show_favs:
@@ -419,13 +423,14 @@ def handle_delete_entry(idx, history, page, show_favs):
         gr.update(visible=False),  # ModelsAccordion
         page, new_label,          # Page State & Label
         gr.update(visible=False, value=None),
-        gr.update(visible=False)
+        gr.update(visible=False),
+        gr.update(visible=False, value=None)
     )
 
 def handle_clear_history(history):
     current_config = config_utils.load_config()
     history_utils.clear_history(current_config)
-    return [], [], "", gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), 0, get_page_label(0, [], False), gr.update(visible=False, value=None), gr.update(visible=False)
+    return [], [], "", gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), 0, get_page_label(0, [], False), gr.update(visible=False, value=None), gr.update(visible=False), gr.update(visible=False, value=None)
 
 def append_prompt(current, added):
     if not added: return current
