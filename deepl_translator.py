@@ -78,7 +78,7 @@ def create_api_key_ui():
     """APIキー設定専用の UI (アコーディオン内)"""
     config = config_utils.load_config()
     
-    with gr.Accordion("APIキー設定", open=False):
+    with gr.Accordion("DeepL API Key Settings", open=False):
         key_input = gr.Textbox(
             label="DeepL API Key", 
             value=config.get("DEEPL_API_KEY", ""),

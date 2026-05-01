@@ -237,15 +237,18 @@ def generate_and_save(
 
     # --- ComfyUIノードへの流し込み ---
     for i, lora_node_id in enumerate(sorted_loras):
+        is_model_only = workflow[lora_node_id].get("class_type") == "LoraLoaderModelOnly"
         if i < len(active_loras):
             lora_name, lora_strength = active_loras[i]
             workflow[lora_node_id]["inputs"]["lora_name"] = lora_name
             workflow[lora_node_id]["inputs"]["strength_model"] = lora_strength
-            workflow[lora_node_id]["inputs"]["strength_clip"] = lora_strength
+            if not is_model_only:
+                workflow[lora_node_id]["inputs"]["strength_clip"] = lora_strength
         else:
             # 使わないノードは強度0で無効化
             workflow[lora_node_id]["inputs"]["strength_model"] = 0.0
-            workflow[lora_node_id]["inputs"]["strength_clip"] = 0.0
+            if not is_model_only:
+                workflow[lora_node_id]["inputs"]["strength_clip"] = 0.0
 
     # 【追加】ファイル名（プレフィックス）を現在時刻で上書きする処理
     if save_node_id:

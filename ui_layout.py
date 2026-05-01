@@ -11,154 +11,7 @@ from urllib.parse import urlparse
 import requests
 import os
 import glob
-import base64
-import mimetypes
-import json
-
-LM_STUDIO_URL = "http://127.0.0.1:1234/v1/chat/completions"
-
-def load_tone_config():
-    default_config = {
-        "default": {
-            "label": "標準",
-            "prompt": "あなたは優秀な「画像生成のプロンプト」アシスタントです。画像とその生成プロンプトが貼られたら、ユーザの「プロンプトのどこを変えると望む絵を生成できるか？」という問いに答え、差し替え後の画像生成プロンプトを掲示してください。",
-            "caption": "落ち着いた女性の声で自然に読み上げてください。",
-            "ref_wav": None
-        }
-    }
-    tone_file = "ai_chat_tones.json"
-    if os.path.exists(tone_file):
-        try:
-            with open(tone_file, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"⚠️ Failed to load {tone_file}: {e}")
-    return default_config
-
-TONE_CONFIG = load_tone_config()
-
-def encode_image_to_base64(filepath):
-    with open(filepath, "rb") as f:
-        return base64.b64encode(f.read()).decode("utf-8")
-
-def chat_and_tts(text, img_path, chatbot_history, api_history, tone, model_name):
-    if not text and not img_path:
-        yield chatbot_history, api_history, gr.update(), gr.update(), ""
-        return
-
-    if img_path:
-        chatbot_history.append({"role": "user", "content": gr.Image(value=img_path, show_label=False)})
-    if text:
-        chatbot_history.append({"role": "user", "content": text})
-
-    api_msg_content = []
-    if text:
-        api_msg_content.append({"type": "text", "text": text})
-    if img_path:
-        b64_img = encode_image_to_base64(img_path)
-        mime_type, _ = mimetypes.guess_type(img_path)
-        if not mime_type:
-            mime_type = "image/jpeg"
-        api_msg_content.append({"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64_img}"}})
-    
-    api_history.append({"role": "user", "content": api_msg_content})
-
-    yield chatbot_history, api_history, None, "", ""
-
-    messages = [{"role": "system", "content": TONE_CONFIG[tone]["prompt"]}] + api_history
-    try:
-        res = requests.post(LM_STUDIO_URL, json={
-            "model": model_name,
-            "messages": messages,
-            "temperature": 0.8,
-            "top_p": 0.95
-        }, timeout=120)
-        res.raise_for_status()
-        reply = res.json()["choices"][0]["message"]["content"]
-    except Exception as e:
-        reply = f"【LLM通信エラー】: {e}"
-
-    chatbot_history.append({"role": "assistant", "content": reply})
-    api_history.append({"role": "assistant", "content": reply})
-
-    yield chatbot_history, api_history, gr.update(), gr.update(), reply
-
-def get_js_code(mode, tone_config_dict):
-    js_tone_config = {k: {"caption": v.get("caption", ""), "ref_wav": v.get("ref_wav")} for k, v in tone_config_dict.items()}
-    js_tone_config_str = json.dumps(js_tone_config, ensure_ascii=False)
-    
-    code = """
-    function(text, tone) {
-        if (!text) return text;
-        const mode = 'MODE_PLACEHOLDER';
-        
-        if (window.audioState && window.audioState.currentAudio) {
-            window.audioState.isStopped = true;
-            window.audioState.currentAudio.pause();
-        }
-        if (mode === 'stop') return text;
-
-        window.audioState = { isStopped: false, currentAudio: null };
-        let isLoopMode = (mode === 'loop');
-        
-        const sentences = text.match(/[^。！？\\n]+[。！？\\n]*/g) || [text];
-        const chunks = [];
-        let currentChunk = '';
-        for (const sentence of sentences) {
-            if (currentChunk.length + sentence.length >= 100 && currentChunk.length > 0) {
-                chunks.push(currentChunk.trim());
-                currentChunk = '';
-            }
-            currentChunk += sentence;
-        }
-        if (currentChunk.trim()) chunks.push(currentChunk.trim());
-        if (chunks.length === 0) return text;
-
-        let toneConfig = TONE_CONFIG_PLACEHOLDER;
-        
-        let fetchAudio = async (chunkText) => {
-            let payload = { text: chunkText, caption: toneConfig[tone].caption };
-            if (toneConfig[tone].ref_wav) payload.ref_wav = toneConfig[tone].ref_wav;
-            try {
-                let res = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                if (!res.ok) return null;
-                let blob = await res.blob();
-                return URL.createObjectURL(blob);
-            } catch (e) { console.error(e); return null; }
-        };
-        
-        if (!window.cachedAudioUrls) window.cachedAudioUrls = {};
-        const cacheKey = text + tone;
-        if (!window.cachedAudioUrls[cacheKey]) window.cachedAudioUrls[cacheKey] = [];
-        let cachedUrls = window.cachedAudioUrls[cacheKey];
-        
-        let playLoop = async () => {
-            while (!window.audioState.isStopped) {
-                let nextAudioPromise = null;
-                if (!cachedUrls[0]) nextAudioPromise = fetchAudio(chunks[0]);
-                
-                for (let i = 0; i < chunks.length; i++) {
-                    if (window.audioState.isStopped) break;
-                    let url = cachedUrls[i];
-                    if (!url) { url = await (nextAudioPromise || fetchAudio(chunks[i])); if (url) cachedUrls[i] = url; }
-                    if (i + 1 < chunks.length && !cachedUrls[i + 1]) { nextAudioPromise = fetchAudio(chunks[i + 1]); } else { nextAudioPromise = null; }
-                    
-                    if (url && !window.audioState.isStopped) {
-                        let audio = new Audio(url);
-                        window.audioState.currentAudio = audio;
-                        await new Promise(r => { audio.onended = r; audio.onerror = r; audio.play().catch(r); });
-                        window.audioState.currentAudio = null;
-                    }
-                }
-                if (!isLoopMode) break;
-                if (!window.audioState.isStopped) await new Promise(res => setTimeout(res, 800));
-            }
-        };
-        playLoop();
-        return text;
-    }
-    """
-    return code.replace("MODE_PLACEHOLDER", mode).replace("TONE_CONFIG_PLACEHOLDER", js_tone_config_str)
+import ai_chat_manager
 
 def get_lora_list(config):
     """ComfyUIから利用可能なLoRAのリストを取得する。API経由を試み、失敗した場合はファイルシステムをスキャンする。"""
@@ -303,6 +156,7 @@ def create_ui(config):
     
     # ワークフローからデフォルトのチェックポイント名（重みの名前）を取得
     default_ckpt, default_loras, default_lllite = comfy_utils.extract_default_settings(workflow_file, ckpt_files, lora_files, lllite_files)
+    tone_config, default_llm_model = ai_chat_manager.load_chat_config()
 
     # --- 2. タグデータのロード (オートコンプリート用) ---
     tags_csv_path = config.get("tags_csv_path", "danbooru_tags.csv")
@@ -451,7 +305,6 @@ def create_ui(config):
                                 reflect_btn = gr.Button("⬆️ Reflect")
                                 append_btn = gr.Button("➕ Append")
                                 translate_current_btn = gr.Button("⬇️ Translate Current Prompt")
-                            deepl_translator.create_api_key_ui()
 
                     with gr.Column(scale=1):
                         image_output = gr.Image(label="Result", format="png")
@@ -465,8 +318,8 @@ def create_ui(config):
                         with gr.Accordion("LoRA Settings", open=False):
                             with gr.Row():
                                 with gr.Column():
-                                    l1_name = gr.Dropdown(label="LoRA 1 Model (Main)", choices=lora_files, value="None")
-                                    l1_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
+                                    l1_name = gr.Dropdown(label="LoRA 1 Model (Main)", choices=lora_files, value=default_loras[0]["name"])
+                                    l1_str = gr.Slider(label="Strength", minimum=0.0, maximum=2.0, step=0.01, value=default_loras[0]["str"])
                             with gr.Row():
                                 turbo_lora_en = gr.Checkbox(label="Turbo LoRA [ON]", value=False, info="強度1.0で自動適用")
                                 highres_lora_en = gr.Checkbox(label="Highres Boost [ON]", value=False, info="強度1.0で自動適用")
@@ -474,20 +327,20 @@ def create_ui(config):
                             with gr.Accordion("Extra LoRAs", open=False):
                                 with gr.Row():
                                     with gr.Column():
-                                        l2_name = gr.Dropdown(label="LoRA 2 Model", choices=lora_files, value="None")
-                                        l2_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
+                                        l2_name = gr.Dropdown(label="LoRA 2 Model", choices=lora_files, value=default_loras[1]["name"])
+                                        l2_str = gr.Slider(label="Strength", minimum=0.0, maximum=2.0, step=0.01, value=default_loras[1]["str"])
                                 with gr.Row():
                                     with gr.Column():
-                                        l3_name = gr.Dropdown(label="LoRA 3 Model", choices=lora_files, value="None")
-                                        l3_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
+                                        l3_name = gr.Dropdown(label="LoRA 3 Model", choices=lora_files, value=default_loras[2]["name"])
+                                        l3_str = gr.Slider(label="Strength", minimum=0.0, maximum=2.0, step=0.01, value=default_loras[2]["str"])
                                 with gr.Row():
                                     with gr.Column():
-                                        l4_name = gr.Dropdown(label="LoRA 4 Model", choices=lora_files, value="None")
-                                        l4_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
+                                        l4_name = gr.Dropdown(label="LoRA 4 Model", choices=lora_files, value=default_loras[3]["name"])
+                                        l4_str = gr.Slider(label="Strength", minimum=0.0, maximum=2.0, step=0.01, value=default_loras[3]["str"])
                                 with gr.Row():
                                     with gr.Column():
-                                        l5_name = gr.Dropdown(label="LoRA 5 Model", choices=lora_files, value="None")
-                                        l5_str = gr.Slider(label="Strength", minimum=0.0, maximum=1.0, step=0.01, value=0.0)
+                                        l5_name = gr.Dropdown(label="LoRA 5 Model", choices=lora_files, value=default_loras[4]["name"])
+                                        l5_str = gr.Slider(label="Strength", minimum=0.0, maximum=2.0, step=0.01, value=default_loras[4]["str"])
 
                         with gr.Accordion("Anima ControlNet-LLLite Settings", open=False):
                             with gr.Row():
@@ -638,6 +491,8 @@ def create_ui(config):
                         cfg_steps_df_data = pd.DataFrame([{"Name": k, "CFG": v[0], "Steps": v[1]} for k, v in CFG_STEPS_PRESETS.items()])
                         cfg_steps_editor = gr.Dataframe(headers=["Name", "CFG", "Steps"], datatype=["str", "number", "number"], value=cfg_steps_df_data, interactive=True)
                         
+                        deepl_translator.create_api_key_ui()
+                        
                         save_btn = gr.Button("Save All Settings", variant="primary"); save_msg = gr.Markdown("")
                     with gr.Column():
                         gr.Markdown("### 🖥️ Server Management")
@@ -648,7 +503,7 @@ def create_ui(config):
             with gr.Tab("💬 AI Chat", id=4):
                 with gr.Row():
                     chat_clear_btn = gr.Button("会話履歴をクリア")
-                    chat_model_input = gr.Textbox(label="LM Studio モデル名", value="gemma-4-26b-a4b-it-heretic-ara-v2-i1", scale=3)
+                    chat_model_input = gr.Textbox(label="LM Studio モデル名", value=default_llm_model, scale=3)
 
                 chat_chatbot = gr.Chatbot(height=500, label="チャット履歴")
                 
@@ -665,8 +520,8 @@ def create_ui(config):
                         chat_msg_input = gr.Textbox(show_label=False, placeholder="メッセージを入力... (Enterで送信)", lines=2)
                 
                 with gr.Row():
-                    tone_choices = [(v.get("label", k), k) for k, v in TONE_CONFIG.items()]
-                    default_tone = "default" if "default" in TONE_CONFIG else list(TONE_CONFIG.keys())[0]
+                    tone_choices = [(v.get("label", k), k) for k, v in tone_config.items()]
+                    default_tone = "default" if "default" in tone_config else list(tone_config.keys())[0]
                     chat_tone_dropdown = gr.Dropdown(
                         choices=tone_choices,
                         value=default_tone,
@@ -869,12 +724,12 @@ def create_ui(config):
         chat_inputs = [chat_msg_input, chat_img_input, chat_chatbot, chat_api_history, chat_tone_dropdown, chat_model_input]
         chat_outputs = [chat_chatbot, chat_api_history, chat_img_input, chat_msg_input, chat_latest_ai_msg]
 
-        chat_send_btn.click(chat_and_tts, inputs=chat_inputs, outputs=chat_outputs)
-        chat_msg_input.submit(chat_and_tts, inputs=chat_inputs, outputs=chat_outputs)
+        chat_send_btn.click(ai_chat_manager.chat_and_tts, inputs=chat_inputs, outputs=chat_outputs)
+        chat_msg_input.submit(ai_chat_manager.chat_and_tts, inputs=chat_inputs, outputs=chat_outputs)
         chat_clear_btn.click(lambda: ([], [], None, "", ""), inputs=None, outputs=[chat_chatbot, chat_api_history, chat_img_input, chat_msg_input, chat_latest_ai_msg])
 
-        chat_play_btn.click(fn=None, inputs=[chat_latest_ai_msg, chat_tone_dropdown], outputs=[chat_latest_ai_msg], js=get_js_code('normal', TONE_CONFIG))
-        chat_loop_btn.click(fn=None, inputs=[chat_latest_ai_msg, chat_tone_dropdown], outputs=[chat_latest_ai_msg], js=get_js_code('loop', TONE_CONFIG))
-        chat_stop_btn.click(fn=None, inputs=[chat_latest_ai_msg, chat_tone_dropdown], outputs=[chat_latest_ai_msg], js=get_js_code('stop', TONE_CONFIG))
+        chat_play_btn.click(fn=None, inputs=[chat_latest_ai_msg, chat_tone_dropdown], outputs=[chat_latest_ai_msg], js=ai_chat_manager.get_js_code('normal', tone_config))
+        chat_loop_btn.click(fn=None, inputs=[chat_latest_ai_msg, chat_tone_dropdown], outputs=[chat_latest_ai_msg], js=ai_chat_manager.get_js_code('loop', tone_config))
+        chat_stop_btn.click(fn=None, inputs=[chat_latest_ai_msg, chat_tone_dropdown], outputs=[chat_latest_ai_msg], js=ai_chat_manager.get_js_code('stop', tone_config))
 
     return demo
