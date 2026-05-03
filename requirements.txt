@@ -1,4 +1,6 @@
-gradio
+gradio==4.44.1
 pandas
 Pillow
 requests
+numpy<2.0
+deepl
