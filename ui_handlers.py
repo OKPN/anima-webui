@@ -299,27 +299,35 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
 def restore_from_history_by_index(idx, history):
     if idx < 0 or not history or idx >= len(history): return [gr.update()] * 45
     s = history[idx]
+    
+    def get_clean_lora(name_key, str_key):
+        name = s.get(name_key) or "None"
+        strength = float(s.get(str_key, 0.0))
+        if strength == 0.0:
+            return "None"
+        return name
+
     return (
-        s["prompt"], s["neg_prompt"], s.get("trigger_first", False), s.get("enable_negpip", False), s["seed"], True, s["cfg"], s["steps"], s["width"], s["height"],
+        s.get("prompt", ""), s.get("neg_prompt", ""), s.get("trigger_first", False), s.get("enable_negpip", False), s.get("seed", 0), True, s.get("cfg", 5.0), s.get("steps", 30), s.get("width", 1024), s.get("height", 1024),
 
         s.get("sampler_name", "euler_ancestral"), s.get("quality_tags", []),
         s.get("y1_en", False), s.get("y1_val", "2026"), s.get("y2_en", False), s.get("y2_val", "2025"),
         s.get("y3_en", False), s.get("y3_val", "2024"),
         s.get("decade_tags", []), s.get("period_tags", []), s.get("meta_tags", []), s.get("safety_tags", []), s.get("artist_tags", ""),
         s.get("custom_tags", []), gr.update(selected=0),
-        s.get("ckpt_name", "None"),
-        s.get("lora1_name", "None"),
+        s.get("ckpt_name") or "None",
+        get_clean_lora("lora1_name", "lora1_strength"),
         float(s.get("lora1_strength", 0.0)),
-        s.get("lora2_name", "None"),
+        get_clean_lora("lora2_name", "lora2_strength"),
         float(s.get("lora2_strength", 0.0)),
-        s.get("lora3_name", "None"),
+        get_clean_lora("lora3_name", "lora3_strength"),
         float(s.get("lora3_strength", 0.0)),
         s.get("turbo_lora_en", False),
         s.get("highres_lora_en", False),
         s.get("detail_lora_en", False),
-        s.get("lora4_name", "None"),
+        get_clean_lora("lora4_name", "lora4_strength"),
         float(s.get("lora4_strength", 0.0)),
-        s.get("lora5_name", "None"),
+        get_clean_lora("lora5_name", "lora5_strength"),
         float(s.get("lora5_strength", 0.0)),
         s.get("lllite_en", False),
         s.get("lllite_model", "None"),

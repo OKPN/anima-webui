@@ -1,10 +1,9 @@
-gradio==4.44.1
+gradio>=5.0,<6.0
 pandas
 Pillow
 requests
 numpy<2.0
 deepl
-huggingface_hub<0.27.0
-pydantic<2.10
-fastapi==0.112.2
-
+huggingface_hub
+pydantic>=2.0
+fastapi>=0.112.2

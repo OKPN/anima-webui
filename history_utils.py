@@ -125,15 +125,6 @@ def add_to_history(config, entry, img_info, current_url, pil_image=None):
     
     history_entry["image"] = f"{base_url}/view?filename={safe_filename}&subfolder={safe_subfolder}&type={img_type}"
     
-    # LoRA情報をhistory_entryに追加
-    history_entry["ckpt_name"] = entry.get("ckpt_name", "None")
-    history_entry["lora1_name"] = entry.get("lora1_name", "None")
-    history_entry["lora1_strength"] = entry.get("lora1_strength", 0.0)
-    history_entry["lora2_name"] = entry.get("lora2_name", "None")
-    history_entry["lora2_strength"] = entry.get("lora2_strength", 0.0)
-    history_entry["lora3_name"] = entry.get("lora3_name", "None")
-    history_entry["lora3_strength"] = entry.get("lora3_strength", 0.0)
-    history_entry["trigger_first"] = entry.get("trigger_first", False)
     history.insert(0, history_entry)
     with open(get_history_path(config), "w", encoding="utf-8") as f:
         json.dump(history, f, indent=4, ensure_ascii=False)
