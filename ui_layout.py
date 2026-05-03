@@ -323,6 +323,7 @@ def create_ui(config):
                             with gr.Row():
                                 turbo_lora_en = gr.Checkbox(label="Turbo LoRA [ON]", value=False, info="強度1.0で自動適用")
                                 highres_lora_en = gr.Checkbox(label="Highres Boost [ON]", value=False, info="強度1.0で自動適用")
+                                detail_lora_en = gr.Checkbox(label="Detail Boost [ON]", value=False, info="強度1.0で自動適用")
                             
                             with gr.Accordion("Extra LoRAs", open=False):
                                 with gr.Row():
@@ -342,7 +343,7 @@ def create_ui(config):
                                         l5_name = gr.Dropdown(label="LoRA 5 Model", choices=lora_files, value=default_loras[4]["name"])
                                         l5_str = gr.Slider(label="Strength", minimum=0.0, maximum=2.0, step=0.01, value=default_loras[4]["str"])
 
-                        with gr.Accordion("Anima ControlNet-LLLite Settings", open=False):
+                        with gr.Accordion("Anima ControlNet-LLLite Settings (Need to install custom node)", open=False):
                             with gr.Row():
                                 lllite_model = gr.Dropdown(label="LLLite Model", choices=lllite_files, value="None", allow_custom_value=True, scale=3)
                                 lllite_en = gr.Checkbox(label="Enable LLLite", value=False, scale=1)
@@ -373,6 +374,7 @@ def create_ui(config):
                         gr.Markdown(f"### [🔗 {ext_link_name}]({ext_link_url})")
 
             with gr.Tab("Auto Gen", id=1):
+                gr.Markdown("直近のGenerateタブの設定で連続50回生成します")
                 with gr.Column(elem_classes="sticky-container"):
                     with gr.Row():
                         start_auto_btn = gr.Button("▶️ Start Auto Gen", variant="primary")
@@ -397,7 +399,8 @@ def create_ui(config):
                     with gr.Column(scale=2):
                         history_gallery = gr.Gallery(label="Past Generations", columns=4, height="auto", value=ui_handlers.get_gallery_display_data(raw_history_startup, config, 0))
                     with gr.Column(scale=1):
-                        history_preview = gr.Image(label="Original Image Preview", interactive=False, visible=False)
+                        with gr.Accordion("Original Image Preview", open=True, visible=False) as preview_accordion:
+                            history_preview = gr.Image(show_label=False, interactive=False)
                 
                 with gr.Accordion("Selected Tag Groups", open=False, visible=False) as tag_accordion:
                     h_q_tags = gr.Textbox(label="Quality Tags", interactive=False, lines=2) 
@@ -411,14 +414,20 @@ def create_ui(config):
                 
                 with gr.Accordion("Applied Positive Prompt", open=False, visible=False) as pos_accordion:
                     selected_prompt_preview = gr.Textbox(show_label=False, interactive=False, lines=3)
+                    selected_prompt_preview = gr.Textbox(show_label=False, interactive=False, max_lines=100)
 
                 with gr.Accordion("Applied Models & LoRAs", open=False, visible=False) as models_accordion:
                     h_ckpt_name = gr.Textbox(label="Checkpoint Model", interactive=False)
                     h_lora1_name = gr.Textbox(label="LoRA 1 Model", interactive=False)
                     h_lora1_strength = gr.Number(label="LoRA 1 Strength", interactive=False)
+                    with gr.Row():
+                        h_turbo_lora_en = gr.Checkbox(label="Turbo LoRA", interactive=False)
+                        h_highres_lora_en = gr.Checkbox(label="Highres Boost", interactive=False)
+                        h_detail_lora_en = gr.Checkbox(label="Detail Boost", interactive=False)
                 
                 with gr.Accordion("Applied Negative Prompt", open=False, visible=False) as neg_accordion:
                     h_neg_prompt = gr.Textbox(show_label=False, interactive=False, lines=2)
+                    h_neg_prompt = gr.Textbox(show_label=False, interactive=False, max_lines=100)
 
                 download_original_file = gr.File(label="Download Original Image", visible=False)
                 
@@ -433,10 +442,10 @@ def create_ui(config):
                         yes_delete_btn = gr.Button("Yes", variant="stop", size="sm", scale=1)
                         no_delete_btn = gr.Button("No", size="sm", scale=1)
                 
-                backup_history_btn = gr.Button("Backup History", variant="secondary", size="sm")
-                
                 # --- 一括削除セクション ---
-                clear_history_btn = gr.Button("Clear All History", variant="stop", size="sm")
+                with gr.Row():
+                    clear_history_btn = gr.Button("Clear All History", variant="stop", size="sm")
+                    backup_history_btn = gr.Button("Backup History", variant="secondary", size="sm")
                 clear_history_notice = gr.Markdown("⚠️ **本当に履歴を消しますか？消去時にバックアップが必ずできます。画像は消えません**", visible=False)
                 with gr.Row(visible=False) as confirm_clear_row:
                     yes_clear_btn = gr.Button("Yes, Clear All", variant="stop", size="sm")
@@ -502,10 +511,14 @@ def create_ui(config):
                     with gr.Column():
                         gr.Markdown("### 🖥️ Server Management")
                         status_text = gr.Textbox(label="Connection Status", value="Checking...", interactive=False)
-                        refresh_btn = gr.Button("🔄 Status"); launch_btn = gr.Button("🚀 Launch ComfyUI", variant="primary")
+                        with gr.Row():
+                            refresh_btn = gr.Button("🔄 Status"); launch_btn = gr.Button("🚀 Launch ComfyUI", variant="primary")
+                        
+                        gr.Markdown("### 🌐 WebUI Settings")
+                        port_in = gr.Number(label="WebUI Port", value=config.get("server_port", 7861), precision=0, info="変更後にSaveしてRestartを押した後、新しいポート番号のURLに手動でアクセスし直してください")
                         restart_btn = gr.Button(f"♻️ Restart App", variant="secondary")
 
-            with gr.Tab("💬 AI Chat", id=4):
+            with gr.Tab("💬 AI Chat (Experimental)", id=4):
                 with gr.Row():
                     chat_clear_btn = gr.Button("会話履歴をクリア")
                     chat_model_input = gr.Textbox(label="LM Studio モデル名", value=default_llm_model, scale=3)
@@ -602,10 +615,15 @@ def create_ui(config):
             
         turbo_lora_en.change(fn=auto_update_cfg_steps_on_turbo, inputs=[turbo_lora_en], outputs=[cfg_steps_preset, cfg_slider, steps_slider])
 
+        def auto_update_ckpt_on_lllite(is_enabled, current_ckpt):
+            return "anima-preview3-base.safetensors" if is_enabled else current_ckpt
+            
+        lllite_en.change(fn=auto_update_ckpt_on_lllite, inputs=[lllite_en, ckpt_name], outputs=[ckpt_name])
+
         predict_params = dict(
             fn=ui_handlers.predict, 
             inputs=[prompt_input, neg_input, trigger_first, enable_negpip, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, history_state, ckpt_name, 
-                    l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, artist_tags_input, artist_random_en, artist_random_num, artist_tags_state,
+                    l1_name, l1_str, turbo_lora_en, highres_lora_en, detail_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, artist_tags_input, artist_random_en, artist_random_num, artist_tags_state,
                     custom_tags_input, url_in, config_state, workflow_file_state,
                     lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end, lllite_auto_res], 
             outputs=[image_output, status_output, history_state, history_gallery, page_state, page_label]
@@ -616,7 +634,7 @@ def create_ui(config):
         auto_gen_event = start_auto_btn.click(
             fn=ui_handlers.continuous_predict,
             inputs=[prompt_input, neg_input, trigger_first, enable_negpip, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider, sampler_dropdown, history_state, ckpt_name, 
-                    l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, artist_tags_input, artist_random_en, artist_random_num, artist_tags_state,
+                    l1_name, l1_str, turbo_lora_en, highres_lora_en, detail_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, artist_tags_input, artist_random_en, artist_random_num, artist_tags_state,
                     custom_tags_input, url_in, config_state, workflow_file_state,
                     lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end, lllite_auto_res],
             outputs=[auto_gallery, auto_status, history_state]
@@ -638,6 +656,7 @@ def create_ui(config):
                 selected_prompt_preview, h_neg_prompt,
                 h_ckpt_name,
                 h_lora1_name, h_lora1_strength,
+                h_turbo_lora_en, h_highres_lora_en, h_detail_lora_en,
                 delete_entry_btn, confirm_delete_row,
                 restore_btn,
                 send_to_chat_btn,
@@ -648,6 +667,7 @@ def create_ui(config):
                 models_accordion,
                 download_original_file,
                 fav_btn,
+                preview_accordion,
                 history_preview
             ]
         )
@@ -657,7 +677,7 @@ def create_ui(config):
             outputs=[prompt_input, neg_input, trigger_first, enable_negpip, seed_input, randomize_seed, cfg_slider, steps_slider, width_slider, height_slider,
                      sampler_dropdown, quality_tags_input, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val,
                      decade_tags_input, period_tags_input, meta_tags_input, safety_tags_input, artist_tags_input, custom_tags_input, tabs, 
-                     ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, turbo_lora_en, highres_lora_en, l4_name, l4_str, l5_name, l5_str,
+                     ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, turbo_lora_en, highres_lora_en, detail_lora_en, l4_name, l4_str, l5_name, l5_str,
                      lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end, lllite_auto_res])
 
         delete_entry_btn.click(fn=lambda: (gr.update(visible=False), gr.update(visible=True)), outputs=[delete_entry_btn, confirm_delete_row])
@@ -671,26 +691,36 @@ def create_ui(config):
                 selected_prompt_preview, h_neg_prompt,
                 h_ckpt_name,
                 h_lora1_name, h_lora1_strength,
+                h_turbo_lora_en, h_highres_lora_en, h_detail_lora_en,
                 delete_entry_btn, confirm_delete_row, restore_btn, send_to_chat_btn, send_to_lllite_btn,
                 tag_accordion, neg_accordion, pos_accordion, models_accordion, page_state, page_label,
                 download_original_file,
                 fav_btn,
+                preview_accordion,
                 history_preview
             ]
         )
         
         # AIチャットへ送るイベント
         send_to_chat_btn.click(
+            fn=lambda: gr.update(selected=4),
+            inputs=None,
+            outputs=[tabs]
+        ).then(
             fn=ui_handlers.send_to_chat_action,
             inputs=[selected_index, history_state, config_state],
-            outputs=[chat_img_input, chat_msg_input, tabs]
+            outputs=[chat_img_input, chat_msg_input]
         )
 
         # LLLiteに送るイベント
         send_to_lllite_btn.click(
+            fn=lambda: gr.update(selected=0),
+            inputs=None,
+            outputs=[tabs]
+        ).then(
             fn=ui_handlers.send_to_lllite_action,
             inputs=[selected_index, history_state, config_state],
-            outputs=[lllite_img, tabs]
+            outputs=[lllite_img]
         )
 
         clear_history_btn.click(fn=lambda: (gr.update(visible=False), gr.update(visible=True), gr.update(visible=True)), 
@@ -698,12 +728,12 @@ def create_ui(config):
         no_clear_btn.click(fn=lambda: (gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)), 
                                 outputs=[clear_history_btn, clear_history_notice, confirm_clear_row]) 
         yes_clear_btn.click(fn=ui_handlers.handle_clear_history, inputs=[history_state], 
-                                outputs=[history_state, history_gallery, selected_prompt_preview, clear_history_notice, confirm_clear_row, clear_history_btn, page_state, page_label, download_original_file, fav_btn, history_preview])
+                                outputs=[history_state, history_gallery, selected_prompt_preview, clear_history_notice, confirm_clear_row, clear_history_btn, page_state, page_label, download_original_file, fav_btn, preview_accordion, history_preview])
         
         backup_history_btn.click(fn=lambda: gr.update(value=ui_handlers.backup_history_action(config)), outputs=[history_msg])
 
         save_btn.click(fn=ui_handlers.handle_save_settings, 
-            inputs=[url_in, bat_in, backup_in, real_out_in, workflow_file_in, q_tags_edit, d_tags_edit, t_tags_edit, m_tags_edit, s_tags_edit, c_tags_edit, tags_path_in, res_editor, cfg_steps_editor, neg_edit, gr.State(ext_link_name), gr.State(ext_link_url)], 
+            inputs=[url_in, bat_in, backup_in, real_out_in, workflow_file_in, q_tags_edit, d_tags_edit, t_tags_edit, m_tags_edit, s_tags_edit, c_tags_edit, tags_path_in, res_editor, cfg_steps_editor, neg_edit, gr.State(ext_link_name), gr.State(ext_link_url), port_in], 
             outputs=[save_msg])
         print(h_q_tags)
         

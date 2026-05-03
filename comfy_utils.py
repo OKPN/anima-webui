@@ -150,8 +150,9 @@ def extract_default_settings(workflow_file, ckpt_files, lora_files, lllite_files
         if i >= 5: break
         inputs = workflow[nid].get("inputs", {})
         l_name = inputs.get("lora_name", "None")
-        l_str = float(inputs.get("strength_model", 0.0))
-        default_loras[i] = {"name": l_name, "str": l_str}
+        # 起動時は常に None / 0.0 にするため、ワークフローからの抽出値で上書きしない
+        # l_str = float(inputs.get("strength_model", 0.0))
+        # default_loras[i] = {"name": l_name, "str": l_str}
         if l_name != "None" and l_name not in lora_files:
             lora_files.append(l_name)
     lora_files.sort()

@@ -10,7 +10,7 @@ from PIL import Image
 def generate_and_save(
     prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
     ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str,
-    turbo_lora_en, highres_lora_en,
+    turbo_lora_en, highres_lora_en, detail_lora_en,
     quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, 
     decade_tags, period_tags, meta_tags, safety_tags, artist_tags, custom_tags, 
     current_comfy_url, workflow_file, config,
@@ -116,7 +116,10 @@ def generate_and_save(
                 break
                 
     if lllite_node_id:
-        if lllite_en:
+        if lllite_en and lllite_model != "None":
+            # LLLite有効時はチェックポイントを強制的に設定
+            ckpt_name = "anima-preview3-base.safetensors"
+            
             uploaded_filename = None
             if lllite_img:
                 active_url = str(current_comfy_url).strip().rstrip("/")
@@ -124,6 +127,8 @@ def generate_and_save(
                 
             if "model_name" in workflow[lllite_node_id].get("inputs", {}):
                 workflow[lllite_node_id]["inputs"]["model_name"] = lllite_model
+            elif "lllite_name" in workflow[lllite_node_id].get("inputs", {}):
+                workflow[lllite_node_id]["inputs"]["lllite_name"] = lllite_model
             if "strength" in workflow[lllite_node_id].get("inputs", {}):
                 workflow[lllite_node_id]["inputs"]["strength"] = float(lllite_str)
             if "start_percent" in workflow[lllite_node_id].get("inputs", {}):
@@ -229,6 +234,8 @@ def generate_and_save(
         active_loras.append((config.get("turbo_lora_path", "anima\\anima-turbo-lora-v0.1.safetensors"), 1.0))
     if highres_lora_en:
         active_loras.append((config.get("highres_lora_path", "anima\\anima-highres-aesthetic-boost.safetensors"), 1.0))
+    if detail_lora_en:
+        active_loras.append((config.get("detail_lora_path", "anima\\anima-rl-v0.1.safetensors"), 1.0))
         
     if l2_name and l2_name != "None": active_loras.append((l2_name, float(l2_str)))
     if l3_name and l3_name != "None": active_loras.append((l3_name, float(l3_str)))
@@ -277,7 +284,7 @@ def generate_and_save(
             "caption": f"Seed: {final_seed} | {sampler_name}",
             "ckpt_name": ckpt_name,
             "lora1_name": l1_name, "lora1_strength": l1_str,
-            "turbo_lora_en": turbo_lora_en, "highres_lora_en": highres_lora_en,
+            "turbo_lora_en": turbo_lora_en, "highres_lora_en": highres_lora_en, "detail_lora_en": detail_lora_en,
             "lora2_name": l2_name, "lora2_strength": l2_str,
             "lora3_name": l3_name, "lora3_strength": l3_str,
             "lora4_name": l4_name, "lora4_strength": l4_str,

@@ -62,7 +62,7 @@ def process_underscores(text):
             processed_tags.append(t.replace("_", " "))
     return ", ".join(processed_tags)
 
-def handle_save_settings(url, bat_path, backup_path, real_out_path, workflow_file, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, c_tags_str, tags_path, res_df, cfg_steps_df, neg_prompt, ext_name, ext_url):
+def handle_save_settings(url, bat_path, backup_path, real_out_path, workflow_file, q_tags_str, d_tags_str, t_tags_str, m_tags_str, s_tags_str, c_tags_str, tags_path, res_df, cfg_steps_df, neg_prompt, ext_name, ext_url, server_port):
     q_list, q_def = parse_tagged_str(q_tags_str)
     d_list, d_def = parse_tagged_str(d_tags_str)
     t_list, t_def = parse_tagged_str(t_tags_str)
@@ -73,12 +73,12 @@ def handle_save_settings(url, bat_path, backup_path, real_out_path, workflow_fil
     success = config_utils.update_and_save_config_v2(
         url, bat_path, backup_path, real_out_path, workflow_file,
         q_list, q_def, d_list, d_def, t_list, t_def, m_list, m_def, s_list, s_def, c_list, c_def, tags_path,
-        res_df, cfg_steps_df, neg_prompt, ext_name, ext_url
+        res_df, cfg_steps_df, neg_prompt, ext_name, ext_url, server_port
     )
     return "✅ 保存完了。再起動後に反映されます。" if success else "❌ 保存失敗。"
 
 def predict(prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, 
-            l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags, 
+            l1_name, l1_str, turbo_lora_en, highres_lora_en, detail_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags, 
             y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, artist_tags, artist_random_en, artist_random_num, artist_tags_list, custom_tags, current_comfy_url, config, workflow_file,
             lllite_en=False, lllite_model="None", lllite_img=None, lllite_str=1.0, lllite_start=0.0, lllite_end=1.0, lllite_auto_res=True):
     
@@ -100,7 +100,7 @@ def predict(prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_se
         output_image, status, saved_entry = generation_manager.generate_and_save(
             prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_seed, cfg, steps, width, height, sampler_name, 
             ckpt_name, l1_name, l1_str, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str,
-            turbo_lora_en, highres_lora_en,
+            turbo_lora_en, highres_lora_en, detail_lora_en,
             quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, 
             decade_tags, period_tags, meta_tags, safety_tags, artist_tags, custom_tags, 
             current_comfy_url, workflow_file, config,
@@ -117,7 +117,7 @@ def predict(prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_se
         return None, f"❌ System Error: {str(e)}", history, gr.update(), gr.update(), gr.update()
 
 def continuous_predict(prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, 
-            l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, artist_tags, artist_random_en, artist_random_num, artist_tags_list, custom_tags, current_comfy_url, config, workflow_file,
+            l1_name, l1_str, turbo_lora_en, highres_lora_en, detail_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, artist_tags, artist_random_en, artist_random_num, artist_tags_list, custom_tags, current_comfy_url, config, workflow_file,
             lllite_en=False, lllite_model="None", lllite_img=None, lllite_str=1.0, lllite_start=0.0, lllite_end=1.0, lllite_auto_res=True):
     """連続生成(Auto Gen)用のジェネレーター関数（50件で自動停止）"""
     auto_images = []
@@ -126,7 +126,7 @@ def continuous_predict(prompt, neg_prompt, trigger_first, enable_negpip, seed, r
         # 既存のpredict関数を呼び出して画像を1枚生成
         output_image, status, new_history, _, _, _ = predict(
             prompt, neg_prompt, trigger_first, enable_negpip, seed, randomize_seed, cfg, steps, width, height, sampler_name, history, ckpt_name, 
-            l1_name, l1_str, turbo_lora_en, highres_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, artist_tags, artist_random_en, artist_random_num, artist_tags_list, custom_tags, current_comfy_url, config, workflow_file,
+            l1_name, l1_str, turbo_lora_en, highres_lora_en, detail_lora_en, l2_name, l2_str, l3_name, l3_str, l4_name, l4_str, l5_name, l5_str, quality_tags, y1_en, y1_val, y2_en, y2_val, y3_en, y3_val, decade_tags, period_tags, meta_tags, safety_tags, artist_tags, artist_random_en, artist_random_num, artist_tags_list, custom_tags, current_comfy_url, config, workflow_file,
             lllite_en, lllite_model, lllite_img, lllite_str, lllite_start, lllite_end, lllite_auto_res
         )
         
@@ -154,7 +154,7 @@ def launch_server(bat, url):
 
 def send_to_chat_action(idx, history, config):
     if idx < 0 or not history or idx >= len(history):
-        return gr.update(), gr.update(), gr.update()
+        return gr.update(), gr.update()
         
     item = history[idx]
     img_path = history_utils.resolve_image_path(item, config)
@@ -197,16 +197,16 @@ def send_to_chat_action(idx, history, config):
         full_prompt = f"{trigger_word}, {full_prompt}" if full_prompt else trigger_word
 
     msg_text = full_prompt
-    return img_path, msg_text, gr.update(selected=4)
+    return img_path, msg_text
 
 def send_to_lllite_action(idx, history, config):
     if idx < 0 or not history or idx >= len(history):
-        return gr.update(), gr.update()
+        return gr.update()
         
     item = history[idx]
     img_path = history_utils.resolve_image_path(item, config)
     
-    return img_path, gr.update(selected=0)
+    return img_path
 
 def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
     # ページネーションを考慮したインデックス計算
@@ -222,6 +222,7 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
             "", # ckpt_name
             "", # lora1_name
             0.0, # lora1_strength
+            False, False, False,
             gr.update(visible=False),  # Delete
             gr.update(visible=False), # Confirm
             gr.update(visible=False), # Restore
@@ -233,7 +234,8 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
             gr.update(visible=False), # Models
             gr.update(visible=False, value=None),
             gr.update(visible=False), # fav_btn
-            gr.update(visible=False, value=None) # history_preview
+            gr.update(visible=False), # preview_accordion
+            gr.update(value=None) # history_preview
         ]
     
     item = target_list[view_index]
@@ -264,6 +266,10 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
     fav_variant = "primary" if is_fav else "secondary"
     
     
+    turbo_lora_en = item.get("turbo_lora_en", False)
+    highres_lora_en = item.get("highres_lora_en", False)
+    detail_lora_en = item.get("detail_lora_en", False)
+    
     return [
         real_index,
         q, d, p, m, s, a, c, 
@@ -272,6 +278,9 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
         ckpt_name,
         lora1_name,
         lora1_strength,
+        turbo_lora_en,
+        highres_lora_en,
+        detail_lora_en,
         gr.update(visible=True),  # Delete
         gr.update(visible=False), # Confirm
         gr.update(visible=True),  # Restore
@@ -283,7 +292,8 @@ def on_image_select(evt: gr.SelectData, history, page, config, show_favs):
         gr.update(visible=True),  # ModelsAccordion
         gr.update(visible=True, value=original_image_path),
         gr.update(visible=True, value=fav_label, variant=fav_variant), # fav_btn
-        gr.update(visible=True, value=original_image_path) # history_preview
+        gr.update(visible=True), # preview_accordion
+        gr.update(value=original_image_path) # history_preview
     ]
 
 def restore_from_history_by_index(idx, history):
@@ -306,6 +316,7 @@ def restore_from_history_by_index(idx, history):
         float(s.get("lora3_strength", 0.0)),
         s.get("turbo_lora_en", False),
         s.get("highres_lora_en", False),
+        s.get("detail_lora_en", False),
         s.get("lora4_name", "None"),
         float(s.get("lora4_strength", 0.0)),
         s.get("lora5_name", "None"),
@@ -365,6 +376,7 @@ def handle_delete_entry(idx, history, page, show_favs):
         return (history, gr.update(), -1, 
                 "", "", "", "", "", "", "", "", "",
                 "", "", 0.0,
+                False, False, False,
                 gr.update(visible=False), gr.update(visible=False), gr.update(visible=False),
                 gr.update(visible=False), # send_to_chat
                 gr.update(visible=False), # send_to_lllite
@@ -372,7 +384,8 @@ def handle_delete_entry(idx, history, page, show_favs):
                 gr.update(visible=False), gr.update(visible=False), page, gr.update(),
                 gr.update(visible=False, value=None),
                 gr.update(visible=False),
-                gr.update(visible=False, value=None))
+                gr.update(visible=False),
+                gr.update(value=None))
     
     current_config = config_utils.load_config()
     new_h = history_utils.delete_history_entry(current_config, history, idx)
@@ -381,6 +394,7 @@ def handle_delete_entry(idx, history, page, show_favs):
         return (new_h, [], -1, 
                 "", "", "", "", "", "", "", "", "",
                 "", "", 0.0,
+                False, False, False,
                 gr.update(visible=False), gr.update(visible=False), gr.update(visible=False),
                 gr.update(visible=False), # send_to_chat
                 gr.update(visible=False), # send_to_lllite
@@ -388,7 +402,8 @@ def handle_delete_entry(idx, history, page, show_favs):
                 gr.update(visible=False), gr.update(visible=False), 0, get_page_label(0, [], show_favs),
                 gr.update(visible=False, value=None),
                 gr.update(visible=False),
-                gr.update(visible=False, value=None))
+                gr.update(visible=False),
+                gr.update(value=None))
     
     # 削除後にページ範囲外にならないよう調整
     if show_favs:
@@ -412,6 +427,7 @@ def handle_delete_entry(idx, history, page, show_favs):
         new_h, new_gallery, -1, 
         "", "", "", "", "", "", "", "", "",
         "", "", 0.0,
+        False, False, False,
         gr.update(visible=False),  # Delete
         gr.update(visible=False), # Confirm
         gr.update(visible=False),  # Restore
@@ -424,13 +440,14 @@ def handle_delete_entry(idx, history, page, show_favs):
         page, new_label,          # Page State & Label
         gr.update(visible=False, value=None),
         gr.update(visible=False),
-        gr.update(visible=False, value=None)
+        gr.update(visible=False),
+        gr.update(value=None)
     )
 
 def handle_clear_history(history):
     current_config = config_utils.load_config()
     history_utils.clear_history(current_config)
-    return [], [], "", gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), 0, get_page_label(0, [], False), gr.update(visible=False, value=None), gr.update(visible=False), gr.update(visible=False, value=None)
+    return [], [], "", gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), 0, get_page_label(0, [], False), gr.update(visible=False, value=None), gr.update(visible=False), gr.update(visible=False), gr.update(value=None)
 
 def append_prompt(current, added):
     if not added: return current

@@ -52,14 +52,14 @@
   },
   "19": {
     "inputs": {
-      "seed": 976471987899589,
+      "seed": 98872540703911,
       "steps": 12,
       "cfg": 1,
       "sampler_name": "euler_ancestral",
       "scheduler": "simple",
       "denoise": 1,
       "model": [
-        "83",
+        "84:83",
         0
       ],
       "positive": [
@@ -114,7 +114,7 @@
   },
   "52": {
     "inputs": {
-      "filename_prefix": "anima/2026-05-01/0501_132515",
+      "filename_prefix": "anima/2026-05-01/0501_181625",
       "images": [
         "8",
         0
@@ -125,7 +125,7 @@
       "title": "画像を保存"
     }
   },
-  "55": {
+  "84:55": {
     "inputs": {
       "lora_name": "anima\\anima-turbo-lora-v0.1.safetensors",
       "strength_model": 1,
@@ -139,12 +139,12 @@
       "title": "LoRAローダーモデルのみ"
     }
   },
-  "79": {
+  "84:79": {
     "inputs": {
       "lora_name": "anima\\anima-turbo-lora-v0.1.safetensors",
-      "strength_model": 1,
+      "strength_model": 0,
       "model": [
-        "55",
+        "84:55",
         0
       ]
     },
@@ -153,12 +153,12 @@
       "title": "LoRAローダーモデルのみ"
     }
   },
-  "80": {
+  "84:80": {
     "inputs": {
       "lora_name": "anima\\anima-turbo-lora-v0.1.safetensors",
       "strength_model": 0,
       "model": [
-        "79",
+        "84:79",
         0
       ]
     },
@@ -167,12 +167,12 @@
       "title": "LoRAローダーモデルのみ"
     }
   },
-  "81": {
+  "84:81": {
     "inputs": {
       "lora_name": "anima\\anima-turbo-lora-v0.1.safetensors",
       "strength_model": 0,
       "model": [
-        "80",
+        "84:80",
         0
       ]
     },
@@ -181,12 +181,12 @@
       "title": "LoRAローダーモデルのみ"
     }
   },
-  "82": {
+  "84:82": {
     "inputs": {
       "lora_name": "anima\\anima-turbo-lora-v0.1.safetensors",
       "strength_model": 0,
       "model": [
-        "81",
+        "84:81",
         0
       ]
     },
@@ -195,12 +195,12 @@
       "title": "LoRAローダーモデルのみ"
     }
   },
-  "83": {
+  "84:83": {
     "inputs": {
       "lora_name": "anima\\anima-turbo-lora-v0.1.safetensors",
       "strength_model": 0,
       "model": [
-        "82",
+        "84:82",
         0
       ]
     },

@@ -35,16 +35,18 @@ DEFAULT_CONFIG = {
         "1024x1024": [1024, 1024],
         "1152x896": [1152, 896],
         "896x1152": [896, 1152],
-        "1216x832": [1216, 832],
-        "832x1216": [832, 1216],
-        "1344x768": [1344, 768],
-        "768x1344": [768, 1344],
-        "512x512": [512, 512]
+        "1536x1536 (1:1)": [1536, 1536],
+        "1792x1344 (4:3)": [1792, 1344],
+        "1344x1792 (3:4)": [1344, 1792],
+        "1920x1280 (3:2)": [1920, 1280],
+        "1280x1920 (2:3)": [1280, 1920],
+        "2048x1152 (16:9)": [2048, 1152],
+        "1152x2048 (9:16)": [1152, 2048]
     },
     "default_resolution": "1152x896",
     "cfg_steps_presets": {
-        "Standard": [5.0, 30],
-        "Fast (LCM/Turbo)": [2.0, 15],
+        "Standard": [4.0, 30],
+        "Fast (LCM/Turbo)": [1.0, 12],
         "High Detail": [7.0, 50],
         "Creative": [8.0, 40]
     },
@@ -84,7 +86,7 @@ def save_config(config_data):
 def update_and_save_config_v2(
     url, bat_path, backup_path, real_out_path, workflow_file,
     q_list, q_def, d_list, d_def, t_list, t_def, m_list, m_def, s_list, s_def, c_list, c_def, tags_path,
-    res_df, cfg_steps_df, neg_prompt, ext_name, ext_url
+    res_df, cfg_steps_df, neg_prompt, ext_name, ext_url, server_port
 ):
     try:
         config = load_config()
@@ -98,6 +100,7 @@ def update_and_save_config_v2(
         config["default_negative_prompt"] = neg_prompt
         config["external_link_name"] = ext_name
         config["external_link_url"] = ext_url
+        config["server_port"] = int(server_port)
         
         config["quality_tags_list"] = q_list
         config["default_quality_tags"] = q_def

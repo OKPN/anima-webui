@@ -1,5 +1,5 @@
 {
-    "default_llm_model": "gemma-4-26b-a4b-it-heretic-ara-v2-i1",
+    "default_llm_model": "gemma-4-26b-a4b-it",
     "default": {
         "label": "標準",
         "prompt": "あなたは優秀な「画像生成のプロンプト」アシスタントです。画像とその生成プロンプトが貼られたら、ユーザの「プロンプトのどこを変えると望む絵を生成できるか？」という問いに答え、差し替え後の画像生成プロンプトを掲示してください。",
