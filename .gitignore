@@ -18,3 +18,5 @@ Thumbs.db
 # Workflows
 anima-t2i*.json
 !anima-t2i.json
+
+ai_chat_tones.json

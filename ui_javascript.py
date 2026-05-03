@@ -122,25 +122,76 @@ def get_js_emphasis(delta, elem_id="prompt_input_area"):
     }}
     """
 
-def get_autocomplete_js(all_tags, target_ids):
+def get_js_toggle_comment(elem_id="prompt_input_area"):
+    """カーソル位置のタグの有効/無効(#の付与)を切り替えるJavaScript"""
+    return f"""
+    () => {{
+        const ta = document.querySelector('#{elem_id} textarea');
+        if (!ta) return;
+        
+        let start = ta.selectionStart;
+        let end = ta.selectionEnd;
+        let txt = ta.value;
+        
+        function replace(s, e, replacement) {{
+            let newFull = txt.substring(0, s) + replacement + txt.substring(e);
+            ta.value = newFull;
+            ta.dispatchEvent(new Event('input', {{ bubbles: true }}));
+            ta.setSelectionRange(s, s + replacement.length);
+            ta.focus();
+        }}
+
+        let s = start;
+        while (s > 0 && txt[s-1] !== ',' && txt[s-1] !== '\\n') s--;
+        let e = end;
+        while (e < txt.length && txt[e] !== ',' && txt[e] !== '\\n') e++;
+        
+        while (s < e && /\\s/.test(txt[s])) s++;
+        while (e > s && /\\s/.test(txt[e-1])) e--;
+
+        if (s < e) {{
+            let content = txt.substring(s, e);
+            if (content.startsWith('#')) {{
+                replace(s, e, content.substring(1));
+            }} else {{
+                replace(s, e, '#' + content);
+            }}
+        }}
+    }}
+    """
+
+def get_autocomplete_js(all_tags, target_ids, artist_tags=None, artist_target_ids=None):
     """
     オートコンプリート機能を有効化するJavaScriptコードを生成する。
     all_tags: 候補となるタグのリスト (Python list)
     target_ids: 対象のGradio TextboxのElem IDのリスト (例: ["prompt_input_area", "neg_prompt_input_area"])
+    artist_tags: アーティストタグのリスト
+    artist_target_ids: アーティストタグ用のElem IDのリスト
     """
+    artist_tags = artist_tags or []
+    artist_target_ids = artist_target_ids or []
+    
     # タグデータをJSON文字列としてJSに埋め込む (1回のみ)
     tags_json = json.dumps(all_tags)
     target_ids_json = json.dumps(target_ids)
+    artist_tags_json = json.dumps(artist_tags)
+    artist_target_ids_json = json.dumps(artist_target_ids)
 
     return f"""
     () => {{
         const TAGS = {tags_json};
         const TARGET_IDS = {target_ids_json};
+        const ARTIST_TAGS = {artist_tags_json};
+        const ARTIST_TARGET_IDS = {artist_target_ids_json};
         const MAX_CANDIDATES = 20;
 
         // グローバル初期化チェック
         if (window._ac_global_initialized) return;
         window._ac_global_initialized = true;
+        
+        // スマホ等のタッチデバイスではフリック入力・予測変換との競合（Error 400）を防ぐため機能を無効化する
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        if (isMobile) return;
 
         function setupAutocomplete(targetId) {{
             const container = document.querySelector('#' + targetId);
@@ -157,6 +208,10 @@ def get_autocomplete_js(all_tags, target_ids):
 
             if (textarea.dataset.acInitialized) return;
             textarea.dataset.acInitialized = "true";
+            
+            // この入力欄がアーティストタグ用かどうか判定し、使用するリストを切り替える
+            const isArtistField = ARTIST_TARGET_IDS.includes(targetId);
+            const activeTagList = isArtistField ? ARTIST_TAGS : TAGS;
 
             // 候補表示用のリスト要素を作成
             const suggestionBox = document.createElement("ul");
@@ -265,7 +320,7 @@ def get_autocomplete_js(all_tags, target_ids):
                 // スペースを含むタグも考慮し、単純なincludes検索
                 // パフォーマンスのため、ヒット数が上限を超えたら打ち切り
                 currentCandidates = [];
-                for (let tag of TAGS) {{
+                for (let tag of activeTagList) {{
                     if (tag.includes(q)) {{
                         currentCandidates.push(tag);
                         if (currentCandidates.length >= MAX_CANDIDATES) break;
@@ -361,5 +416,6 @@ def get_autocomplete_js(all_tags, target_ids):
 
         // 全ターゲットに対してセットアップ実行
         TARGET_IDS.forEach(id => setupAutocomplete(id));
+        ARTIST_TARGET_IDS.forEach(id => setupAutocomplete(id));
     }}
     """

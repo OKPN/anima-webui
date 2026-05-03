@@ -17,7 +17,7 @@
   },
   "11": {
     "inputs": {
-      "text": "masterpiece, best quality, good quality, 1980s, safe, Frieren is sitting in a chair reading a book.",
+      "text": "masterpiece, best quality, score_7, safe, anime, a close-up of a futuristic cyberpunk robotic eye, original close-up eye composition strictly preserved, encased in weathered metallic blue and chrome plating with exposed wiring, glowing orange indicator lights, hydraulic pistons, and panel seams wrapping around the eyelid, a chrome mechanical tear duct with fine circuit details, long dark anime-style eyelashes framing the eye, soft pink sclera. The dark pupil holds a complete, glowing Earth with blue atmosphere and white clouds as a reflection, while the surrounding iris reflects a vivid cosmic scene: a fiery red shooting star, wispy cyan nebula clouds, and tiny glowing star specks. No change to the original close-up eye framing, no additional elements outside the eye structure, neon accent lighting, high contrast cyberpunk color palette, intricate mechanical engineering, sharp line art, gritty futuristic sci-fi atmosphere.",
       "clip": [
         "45",
         0
@@ -30,7 +30,7 @@
   },
   "12": {
     "inputs": {
-      "text": "worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia, extra arms, extra legs, bad anatomy, missing limb, bad hands, extra fingers, extra digits, bad fingers, bad legs, extra legs, bad feet, ",
+      "text": "worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia,  extra arms, extra legs, bad anatomy, missing limb, bad hands, extra fingers, extra digits, bad fingers, bad legs, extra legs, bad feet,multiple legs, multiplegirls",
       "clip": [
         "45",
         0
@@ -52,14 +52,14 @@
   },
   "19": {
     "inputs": {
-      "seed": 167231482023498,
-      "steps": 50,
-      "cfg": 5,
+      "seed": 98872540703911,
+      "steps": 12,
+      "cfg": 1,
       "sampler_name": "euler_ancestral",
       "scheduler": "simple",
       "denoise": 1,
       "model": [
-        "44",
+        "84:83",
         0
       ],
       "positive": [
@@ -83,7 +83,7 @@
   "28": {
     "inputs": {
       "width": 896,
-      "height": 1152,
+      "height": 1504,
       "batch_size": 1
     },
     "class_type": "EmptyLatentImage",
@@ -93,7 +93,7 @@
   },
   "44": {
     "inputs": {
-      "unet_name": "anima-preview.safetensors",
+      "unet_name": "anima-preview3-base.safetensors",
       "weight_dtype": "default"
     },
     "class_type": "UNETLoader",
@@ -114,7 +114,7 @@
   },
   "52": {
     "inputs": {
-      "filename_prefix": "anima/2026-02-07_053424",
+      "filename_prefix": "anima/2026-05-01/0501_181625",
       "images": [
         "8",
         0
@@ -123,6 +123,90 @@
     "class_type": "SaveImage",
     "_meta": {
       "title": "画像を保存"
+    }
+  },
+  "84:55": {
+    "inputs": {
+      "lora_name": "anima\\anima-turbo-lora-v0.1.safetensors",
+      "strength_model": 1,
+      "model": [
+        "44",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoRAローダーモデルのみ"
+    }
+  },
+  "84:79": {
+    "inputs": {
+      "lora_name": "anima\\anima-turbo-lora-v0.1.safetensors",
+      "strength_model": 0,
+      "model": [
+        "84:55",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoRAローダーモデルのみ"
+    }
+  },
+  "84:80": {
+    "inputs": {
+      "lora_name": "anima\\anima-turbo-lora-v0.1.safetensors",
+      "strength_model": 0,
+      "model": [
+        "84:79",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoRAローダーモデルのみ"
+    }
+  },
+  "84:81": {
+    "inputs": {
+      "lora_name": "anima\\anima-turbo-lora-v0.1.safetensors",
+      "strength_model": 0,
+      "model": [
+        "84:80",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoRAローダーモデルのみ"
+    }
+  },
+  "84:82": {
+    "inputs": {
+      "lora_name": "anima\\anima-turbo-lora-v0.1.safetensors",
+      "strength_model": 0,
+      "model": [
+        "84:81",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoRAローダーモデルのみ"
+    }
+  },
+  "84:83": {
+    "inputs": {
+      "lora_name": "anima\\anima-turbo-lora-v0.1.safetensors",
+      "strength_model": 0,
+      "model": [
+        "84:82",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoRAローダーモデルのみ"
     }
   }
 }

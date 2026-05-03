@@ -2,7 +2,7 @@ import gradio as gr
 import deepl
 import config_utils  # 共通ユーティリティをインポート
 
-def translate_prompt(text):
+def translate_prompt(text, direction):
     """DeepLを使用してテキストを翻訳する"""
     if not text:
         return ""
@@ -14,9 +14,11 @@ def translate_prompt(text):
     if not api_key or "YOUR" in api_key or "ここに" in api_key:
         return "Error: APIキーが設定されていません。"
 
+    target_lang = "EN-US" if direction == "JA -> EN" else "JA"
+
     try:
         translator = deepl.Translator(api_key)
-        result = translator.translate_text(text, target_lang="EN-US")
+        result = translator.translate_text(text, target_lang=target_lang)
         return result.text
     except Exception as e:
         return f"Error: {str(e)}"
@@ -37,12 +39,14 @@ def create_translation_ui():
     """翻訳メイン UI (日本語入力と翻訳結果表示)"""
     # 外部のアコーディオンで管理するため gr.Column のみ維持
     with gr.Column():
-        input_ja = gr.Textbox(
+        direction_radio = gr.Radio(choices=["JA -> EN", "EN -> EN/JA (英→日)"], value="JA -> EN", label="Translation Direction")
+        
+        input_text = gr.Textbox(
             label="日本語プロンプト", 
             placeholder="ここに日本語を入力...", 
             lines=3
         )
-        output_en = gr.Textbox(
+        output_text = gr.Textbox(
             label="翻訳結果（英文）", 
             lines=3, 
             interactive=False,
@@ -52,21 +56,29 @@ def create_translation_ui():
             clear_btn = gr.Button("クリア", variant="secondary")
             translate_btn = gr.Button("翻訳実行", variant="primary")
         
+        def update_labels(direction):
+            if direction == "JA -> EN":
+                return gr.update(label="日本語プロンプト", placeholder="ここに日本語を入力..."), gr.update(label="翻訳結果（英文）")
+            else:
+                return gr.update(label="English Prompt", placeholder="Enter English text here..."), gr.update(label="翻訳結果（日本語）")
+                
+        direction_radio.change(fn=update_labels, inputs=[direction_radio], outputs=[input_text, output_text])
+
         # イベント紐付け
-        translate_btn.click(fn=translate_prompt, inputs=[input_ja], outputs=[output_en])
+        translate_btn.click(fn=translate_prompt, inputs=[input_text, direction_radio], outputs=[output_text])
         clear_btn.click(
             fn=lambda: ("", ""),
             inputs=None,
-            outputs=[input_ja, output_en]
+            outputs=[input_text, output_text]
         )
     
-    return input_ja, output_en
+    return direction_radio, input_text, output_text
 
 def create_api_key_ui():
     """APIキー設定専用の UI (アコーディオン内)"""
     config = config_utils.load_config()
     
-    with gr.Accordion("APIキー設定", open=False):
+    with gr.Accordion("DeepL API Key Settings", open=False):
         key_input = gr.Textbox(
             label="DeepL API Key", 
             value=config.get("DEEPL_API_KEY", ""),

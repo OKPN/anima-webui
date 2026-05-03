@@ -4,7 +4,7 @@ import pandas as pd
 
 # アプリのバージョン定数
 APP_NAME = "Anima T2I WebUI"
-VERSION = "1.5.2" # Update Version
+VERSION = "2.0.0" # Update Version
 CONFIG_FILE = "config.json"
 
 DEFAULT_CONFIG = {
@@ -35,9 +35,22 @@ DEFAULT_CONFIG = {
         "1024x1024": [1024, 1024],
         "1152x896": [1152, 896],
         "896x1152": [896, 1152],
-        "1216x832": [1216, 832]
+        "1536x1536 (1:1)": [1536, 1536],
+        "1792x1344 (4:3)": [1792, 1344],
+        "1344x1792 (3:4)": [1344, 1792],
+        "1920x1280 (3:2)": [1920, 1280],
+        "1280x1920 (2:3)": [1280, 1920],
+        "2048x1152 (16:9)": [2048, 1152],
+        "1152x2048 (9:16)": [1152, 2048]
     },
     "default_resolution": "1152x896",
+    "cfg_steps_presets": {
+        "Standard": [4.0, 30],
+        "Fast (LCM/Turbo)": [1.0, 12],
+        "High Detail": [7.0, 50],
+        "Creative": [8.0, 40]
+    },
+    "default_cfg_steps": "Standard",
     "tags_csv_path": "danbooru_tags.csv",
     "external_link_name": "Catbox.moe",
     "external_link_url": "https://catbox.moe/"
@@ -49,7 +62,14 @@ def load_config():
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 user_config = json.load(f)
-                config.update(user_config)
+                # 既存の設定を読み込む際、辞書項目（プリセット類）はマージする
+                for key, value in user_config.items():
+                    if isinstance(value, dict) and key in config and isinstance(config[key], dict):
+                        merged_dict = config[key].copy()
+                        merged_dict.update(value)
+                        config[key] = merged_dict
+                    else:
+                        config[key] = value
         except Exception:
             pass
     return config
@@ -66,7 +86,7 @@ def save_config(config_data):
 def update_and_save_config_v2(
     url, bat_path, backup_path, real_out_path, workflow_file,
     q_list, q_def, d_list, d_def, t_list, t_def, m_list, m_def, s_list, s_def, c_list, c_def, tags_path,
-    res_df, neg_prompt, ext_name, ext_url
+    res_df, cfg_steps_df, neg_prompt, ext_name, ext_url, server_port
 ):
     try:
         config = load_config()
@@ -80,6 +100,7 @@ def update_and_save_config_v2(
         config["default_negative_prompt"] = neg_prompt
         config["external_link_name"] = ext_name
         config["external_link_url"] = ext_url
+        config["server_port"] = int(server_port)
         
         config["quality_tags_list"] = q_list
         config["default_quality_tags"] = q_def
@@ -98,6 +119,11 @@ def update_and_save_config_v2(
         for _, row in res_df.iterrows():
             new_res[row["Name"]] = [int(row["Width"]), int(row["Height"])]
         config["resolution_presets"] = new_res
+        
+        new_cfg_steps = {}
+        for _, row in cfg_steps_df.iterrows():
+            new_cfg_steps[row["Name"]] = [float(row["CFG"]), int(row["Steps"])]
+        config["cfg_steps_presets"] = new_cfg_steps
         
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=4, ensure_ascii=False)
