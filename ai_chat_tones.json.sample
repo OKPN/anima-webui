@@ -10,6 +10,6 @@
         "label": "カスタムキャラ名",
         "prompt": "あなたはユーザーを助けるアシスタントです。独自のキャラクターになりきって回答してください。",
         "caption": "読み上げ時の音声の雰囲気を指定してください（例：明るい少女の声）。",
-        "ref_wav": "C:/path/to/reference_voice.wav"
+        "ref_wav": "C:/path/to/your/irodori-tts/folder/refs/reference_voice.wav"
     }
 }
