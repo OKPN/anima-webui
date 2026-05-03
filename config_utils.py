@@ -4,7 +4,7 @@ import pandas as pd
 
 # アプリのバージョン定数
 APP_NAME = "Anima T2I WebUI"
-VERSION = "2.0.0" # Update Version
+VERSION = "2.1.0" # Update Version
 CONFIG_FILE = "config.json"
 
 DEFAULT_CONFIG = {

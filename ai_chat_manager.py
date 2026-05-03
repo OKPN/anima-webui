@@ -43,7 +43,7 @@ def chat_and_tts(text, img_path, chatbot_history, api_history, tone, model_name)
         return
 
     if img_path:
-        chatbot_history.append({"role": "user", "content": gr.Image(value=img_path, show_label=False)})
+        chatbot_history.append({"role": "user", "content": (img_path,)})
     if text:
         chatbot_history.append({"role": "user", "content": text})
 

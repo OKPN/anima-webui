@@ -523,7 +523,7 @@ def create_ui(config):
                     chat_clear_btn = gr.Button("会話履歴をクリア")
                     chat_model_input = gr.Textbox(label="LM Studio モデル名", value=default_llm_model, scale=3)
 
-                chat_chatbot = gr.Chatbot(height=500, label="チャット履歴")
+                chat_chatbot = gr.Chatbot(height=500, label="チャット履歴", type="messages")
                 
                 gr.Markdown("### 🔊 音声再生コントロール (最新のメッセージ)")
                 with gr.Row():
